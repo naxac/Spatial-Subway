@@ -1,0 +1,31 @@
+[separator]:bread
+$spawn 				= "devices\separator"
+inv_grid_width		= 0
+inv_grid_height		= 0
+inv_weight			= 0
+
+[device_teleport]:antirad
+$spawn 				= "devices\device_teleport"
+
+visual				= equipments\item_datchik3.ogf
+inv_name			= teleport
+inv_name_short		= teleport
+description			= teleport_descr
+
+inv_weight			= 0.3
+cost				= 100000
+
+inv_grid_width		= 1
+inv_grid_height		= 1
+inv_grid_x			= 5
+inv_grid_y			= 14
+
+belt				= true
+default_to_ruck		= false
+
+[zone_tele_naxac]
+GroupControlSection		= spawn_group_restrictor
+$spawn					= "ai\zone_tele_naxac"
+;$prefetch 				= 64
+class					= SPC_RS_S
+script_binding          = bind_restrictor.bind
