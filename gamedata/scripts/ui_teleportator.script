@@ -1,3 +1,4 @@
+-- -*- mode: lua; encoding: windows-1251 -*-
 local function log(fmt, ...)
 	get_console():execute("load ~ "..script_name().." : "..string.format(fmt, ...))
 	get_console():execute("flush")
@@ -27,17 +28,24 @@ Frect.height = function (rect)
 	return rect.y2 - rect.y1
 end
 -----------------------------------------
-
+math.clamp = function( n, min, max )
+	if min>max then min,max=max,min end
+	return (n>max and max) or (n<min and min) or n
+end
+-----------------------------------------
 -- Настройки управления
 local move_shift = 5	-- кол-во пикселей, на которое перемещается карта за апдейт
-local min_zoom = nil	-- минимальный масштаб (считается по ширине глобальной карты)
+local move_delta = 3   -- сколько пикселей прибавляем/отнимаем от move_shift при нажатии Shift/Ctrl
+local min_zoom = nil	-- минимальный масштаб
 local max_zoom = 5		-- максимальный масштаб
 local zoom_shift = 0.4	-- увеличение/уменьшение масштаба за один клик
+local spot_size = 12        -- размер меток на аномалиях, пиксели
 
-local map_st = {x=0, y=0}
-local scale = 1
+local map_st = {x=0, y=0}   -- текущее положение карты
+local scale = 1                     -- текущий масштаб
 local iniCache = {}
-local kStretch = ( 1024/768 ) / ( device().width/device().height )
+local kStretch = ( 1024/768 ) / ( device().width/device().height )  -- коэффициент для подстройки под разрешение экрана
+
 
 class "UIPdaTeleport" (CUIScriptWnd)
 
@@ -46,8 +54,10 @@ function UIPdaTeleport:__init() super()
 	self.anoms = {}
 	self.ini = ini_file("game_maps_single.ltx")
 	self.can_jump = false
+	self.move = { [1] = false, [2] = false, [3] = false, [4] = false }
 	
 	self:Init(0,0,1024,768)
+
 	local xml = CScriptXmlInit()
 	xml:ParseFile("ui_teleport.xml")
 	
@@ -78,42 +88,41 @@ function UIPdaTeleport:__init() super()
 	
 	-- Кнопки навигации
 	xml:InitStatic("st_center", self)
-	
 	self:Register(xml:InitButton("btn_left",self), "btn_left")
-	self:AddCallback("btn_left", ui_events.BUTTON_DOWN, function() self.move = 1 end, self)
+	self:AddCallback("btn_left", ui_events.BUTTON_DOWN, function(wnd) wnd.move[1] = true end, self)
 	self:Register(xml:InitButton("btn_right",self), "btn_right")
-	self:AddCallback("btn_right", ui_events.BUTTON_DOWN, function() self.move = 2 end, self)
+	self:AddCallback("btn_right", ui_events.BUTTON_DOWN, function(wnd) wnd.move[2] = true end, self)
 	self:Register(xml:InitButton("btn_up",self), "btn_up")
-	self:AddCallback("btn_up", ui_events.BUTTON_DOWN, function() self.move = 3 end, self)
+	self:AddCallback("btn_up", ui_events.BUTTON_DOWN, function(wnd) wnd.move[3] = true end, self)
 	self:Register(xml:InitButton("btn_down",self), "btn_down")
-	self:AddCallback("btn_down", ui_events.BUTTON_DOWN, function() self.move = 4 end, self)
+	self:AddCallback("btn_down", ui_events.BUTTON_DOWN, function(wnd) wnd.move[4] = true end, self)
 	-- Зум
 	self:Register(xml:InitButton("btn_zoom_plus",self), "zoom_plus")
-	self:AddCallback("zoom_plus", ui_events.BUTTON_DOWN, self.ZoomPlus, self)
+	self:AddCallback("zoom_plus", ui_events.BUTTON_DOWN, self.ZoomAdd, self)
 	self:Register(xml:InitButton("btn_zoom_minus",self), "zoom_minus")
-	self:AddCallback("zoom_minus", ui_events.BUTTON_DOWN, self.ZoomMinus, self)
+	self:AddCallback("zoom_minus", ui_events.BUTTON_DOWN, self.ZoomSub, self)
 	self:Register(xml:InitButton("btn_zoom_default",self), "zoom_default")
-	self:AddCallback("zoom_default", ui_events.BUTTON_DOWN,
-		function(wnd)
-			if scale~=min_zoom then
-				scale = min_zoom
-				wnd:ResizeMap()
-			end
-		end,
-	self)
+	self:AddCallback("zoom_default", ui_events.BUTTON_DOWN, self.ZoomDefault, self)
 	-- Кнопка выхода
 	self:Register(xml:Init3tButton("btn_quit",self), "btn_quit")
 	self:AddCallback("btn_quit", ui_events.BUTTON_CLICKED, self.on_quit, self)
 end
 
-function UIPdaTeleport:ZoomPlus()
+function UIPdaTeleport:ZoomDefault()
+	if scale~=min_zoom then
+		scale = min_zoom
+		self:ResizeMap()
+	end
+end
+
+function UIPdaTeleport:ZoomAdd()
 	if scale<max_zoom then
 		scale = math.min(scale+zoom_shift, max_zoom)
 		self:ResizeMap()
 	end
 end
 
-function UIPdaTeleport:ZoomMinus()
+function UIPdaTeleport:ZoomSub()
 	if scale>min_zoom then
 		scale = math.max(scale-zoom_shift, min_zoom)
 		self:ResizeMap()
@@ -158,24 +167,14 @@ function UIPdaTeleport:DrawMap()
 	local actor_pos = db.actor:position()
 	local level_name = level.name()
 	local show_anom = scale>1.5
+	local w = spot_size*kStretch
 	for k in pairs(self.level_maps) do
 		local level_map = self:DrawLevelMap(k)
 		gMap:AttachChild(level_map)
 		self.level_maps[k] = level_map
 		self:Register(level_map, "st_"..k)
-		self:AddCallback("st_"..k, ui_events.STATIC_FOCUS_RECEIVED,
-			function(wnd)
-				wnd.map_name:SetTextST(k)
-				wnd.map_in_focus = k
-			end,
-		self)
-		self:AddCallback("st_"..k, ui_events.STATIC_FOCUS_LOST,
-			function(wnd)
-				if wnd.map_in_focus == k then
-					wnd.map_name:SetTextST("global_map")
-				end
-			end,
-		self)
+		self:AddCallback("st_"..k, ui_events.STATIC_FOCUS_RECEIVED, this.onMapFocus, { wnd = self, map = k } )
+		self:AddCallback("st_"..k, ui_events.STATIC_FOCUS_LOST, this.onMapFocusLost, { wnd = self, map = k } )
 		val = teleportator.levels[k]
 		if val and #val>0 then
 			rect = self:GetFrect(k, "bound_rect")
@@ -185,7 +184,7 @@ function UIPdaTeleport:DrawMap()
 				local btn_name = "btn_"..k..i
 				local btn = CUIButton()
 				btn:SetAutoDelete(true)
-				btn:Init("teleport\\ui_pda_tele", pos.x-6, pos.y-6, 12, 12)
+				btn:Init("teleport\\ui_pda_tele", pos.x-w/2, pos.y-spot_size/2, w, spot_size)
 				btn:SetOriginalRect(997,834,19,19)
 				btn:SetStretchTexture(true)
 				level_map:AttachChild(btn)
@@ -193,24 +192,33 @@ function UIPdaTeleport:DrawMap()
 					btn:SetColor(GetARGB(255,20,255,20))
 				elseif self.can_jump then
 					self:Register(btn, btn_name)
-					self:AddCallback(btn_name, ui_events.BUTTON_CLICKED, 
-						function(wnd)
-							wnd:on_quit()
-							if teleportator.remove_art() then
-								teleportator.start_small_timer(1.3, function() _G.block_tele_sms = nil end)
-								_G.block_tele_sms = true
-								level.add_pp_effector ("teleport.ppe", 2006, false)
-								local snd_obj = xr_sound.get_safe_sound_object("anomaly\\teleport_work_1")
-								snd_obj:play_no_feedback(db.actor, sound_object.s2d, 0, vector(), 1.0)
-								teleportator.start_small_timer(0.5, teleportator.go_to, k, i)
-							end
-						end,
-					self)
+					self:AddCallback(btn_name, ui_events.BUTTON_CLICKED, this.onAnomalyClicked, { wnd = self, lvl = k, index = i } )
 				end
 				btn:Show(show_anom)
 				self.anoms[btn_name] = btn
 			end
 		end
+	end
+end
+
+function onMapFocus( t )
+	t.wnd.map_name:SetTextST(t.map)
+	t.wnd.map_in_focus = t.map
+end
+function onMapFocusLost( t )
+	if t.wnd.map_in_focus == t.map then
+		t.wnd.map_name:SetTextST("global_map")
+	end
+end
+function onAnomalyClicked( t )
+	t.wnd:on_quit()
+	if teleportator.remove_art() then
+		teleportator.start_small_timer(1.3, function() _G.block_tele_sms = nil end)
+		_G.block_tele_sms = true
+		level.add_pp_effector ("teleport.ppe", 2006, false)
+		local snd_obj = xr_sound.get_safe_sound_object("anomaly\\teleport_work_1")
+		snd_obj:play_no_feedback(db.actor, sound_object.s2d, 0, vector(), 1.0)
+		teleportator.start_small_timer(0.5, teleportator.go_to, t.lvl, t.index)
 	end
 end
 
@@ -226,8 +234,8 @@ function UIPdaTeleport:ResizeMap()
 	
 	map_st.mxr = -newW + self.map_back:GetWidth()
 	map_st.mxd = -newH + self.map_back:GetHeight()
-	map_st.x = math.min(math.max(map_st.x*newW/oldW, map_st.mxr), 0)
-	map_st.y = math.min(math.max(map_st.y*newH/oldH, map_st.mxd), 0)
+	map_st.x = math.clamp(map_st.x*newW/oldW, map_st.mxr, 0)
+	map_st.y = math.clamp(map_st.y*newH/oldH, map_st.mxd, 0)
 	
 	wnd:SetWndPos(map_st.x, map_st.y)
 	
@@ -248,21 +256,6 @@ function UIPdaTeleport:ResizeMap()
 			end
 		end
 	end
-end
-
-function UIPdaTeleport:Update()
-	CUIScriptWnd.Update(self)
-	if not self.move then return end
-	if self.move == 1 then
-		map_st.x = math.min(map_st.x + move_shift, 0)
-	elseif self.move == 2 then
-		map_st.x = math.max(map_st.x - move_shift, map_st.mxr)
-	elseif self.move == 3 then
-		map_st.y =  math.min(map_st.y + move_shift, 0)
-	elseif self.move == 4 then
-		map_st.y = math.max(map_st.y - move_shift, map_st.mxd)
-	end
-	self.global_map:SetWndPos(map_st.x, map_st.y)
 end
 
 function UIPdaTeleport:DrawLevelMap(level)
@@ -313,6 +306,24 @@ function UIPdaTeleport:GetFrect(section, line)
 	end
 end
 
+local move2func = {
+	[1] = function() map_st.x = math.min(map_st.x + move_shift, 0) end,
+	[2] = function() map_st.x = math.max(map_st.x - move_shift, map_st.mxr) end,
+	[3] = function() map_st.y =  math.min(map_st.y + move_shift, 0) end,
+	[4] = function() map_st.y = math.max(map_st.y - move_shift, map_st.mxd) end
+}
+function UIPdaTeleport:Update()
+	CUIScriptWnd.Update(self)
+
+	if not self.need_update then return end
+
+	for i, v in ipairs(self.move) do
+		if v then move2func[i]() end
+	end
+	
+	self.global_map:SetWndPos(map_st.x, map_st.y)
+end
+
 local dik2move = {
 	[DIK_keys.DIK_LEFT] = 1,
 	[DIK_keys.DIK_RIGHT] = 2,
@@ -328,29 +339,51 @@ local dik2move = {
 	[DIK_keys.DIK_NUMPAD2] = 4
 }
 function UIPdaTeleport:OnKeyboard(dik, keyboard_action)
+	CUIScriptWnd.OnKeyboard(self, dik, keyboard_action)
+
 	if keyboard_action == ui_events.WINDOW_KEY_PRESSED then
 		if dik == DIK_keys.DIK_ESCAPE then
 			self:on_quit()
 		elseif dik2move[dik] then
-			self.move = dik2move[dik]
-		elseif dik == DIK_keys.DIK_LSHIFT then
-			move_shift = move_shift-3
-		elseif dik == DIK_keys.DIK_LCONTROL then
-			move_shift = move_shift+3
+			self.move[ dik2move[dik] ] = true
+			self.need_update = true
+		elseif dik == DIK_keys.DIK_LSHIFT
+			or dik == DIK_keys.DIK_RSHIFT
+		then
+			move_shift = move_shift - move_delta
+		elseif dik == DIK_keys.DIK_LCONTROL
+			or dik == DIK_keys.DIK_RCONTROL
+		then
+			move_shift = move_shift + move_delta
 		elseif dik == DIK_keys.DIK_SUBTRACT then
-			self:ZoomMinus()
+			self:ZoomSub()
 		elseif dik == DIK_keys.DIK_ADD then
-			self:ZoomPlus()
+			self:ZoomAdd()
 		end
+
 	elseif keyboard_action == ui_events.WINDOW_KEY_RELEASED then
-		if dik == DIK_keys.DIK_LSHIFT then
-			move_shift = move_shift+3
-		elseif dik == DIK_keys.DIK_LCONTROL then
-			move_shift = move_shift-3
-		else
-			self.move = nil
+		if dik == DIK_keys.DIK_LSHIFT
+			or dik == DIK_keys.DIK_RSHIFT
+		then
+			move_shift = move_shift + move_delta
+		elseif dik == DIK_keys.DIK_LCONTROL
+			or dik == DIK_keys.DIK_RCONTROL 
+		then
+			move_shift = move_shift - move_delta
+		elseif dik2move[dik] then
+			self.move[ dik2move[dik] ] = false
+			for i, v in ipairs(self.move) do
+				if v then return true end
+			end
+			self.need_update = nil
+		elseif dik == 337 then  -- DIK_LMOUSE
+			for i = 1, 4 do
+				self.move[i] = false
+				self.need_update = nil
+			end
 		end
 	end
+
 	return true
 end
 
