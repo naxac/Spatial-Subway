@@ -1,0 +1,54 @@
+local function log(fmt, ...)
+	get_console():execute("load ~ "..script_name().." : "..string.format(fmt, ...))
+	get_console():execute("flush")
+end
+
+local anom_classes = {
+	[clsid.zone_bfuzz] = true,
+	[clsid.zone_bfuzz_s] = true,
+	[clsid.zone_galantine] = true,
+	[clsid.zone_galant_s] = true,
+	[clsid.zone_mbald_s] = true,
+	[clsid.zone_mincer] = true,
+	[clsid.zone_mincer_s] = true,
+	[clsid.zone_mosquito_bald] = true
+}
+
+-- читаем, что спавнить и с какой вероятностью, из конфигов аномалий
+function spawn_artefacts(lname)
+	local math_random = math.random
+	if math_random() > 0.4 then return end
+	
+	local ini = system_ini()
+	local sim = alife()
+	local gg = game_graph()
+	local obj, sect
+	for i=1,65534 do
+		obj = sim:object(i)		-- по серверным объектам, т.к. в онлайн аномалии выходят позже актера
+		if obj and anom_classes[obj:clsid()] then
+			if sim:level_name(gg:vertex(obj.m_game_vertex_id):level_id())==lname then
+				sect = obj:section_name()
+			--	log("spawn_artefacts: %s", obj:name())
+				if ini:r_float(sect, "BirthProbability")>math_random() then
+					local arts = ini:r_string(sect, "artefacts")
+					local prob = {}
+				--	log("arts = %s", arts)
+					for a, n in string.gmatch(arts, "([%w_%-]+)%s*,%s*([%d%.]+)") do
+						prob[a] = tonumber(n)
+					--	log("prob: [%s] = %s", a, n)
+					end
+					for k,v in pairs(prob)do
+						if v > math_random() then
+							local sobj = sim:create(k, obj.position:add(vector():set(0,1,0)),
+											obj.m_level_vertex_id, obj.m_game_vertex_id)
+						--	level.map_add_object_spot_ser(sobj.id, "red_location", sobj:name())
+						--	log("spawn "..sobj:name())
+							return true
+						end
+					end
+				end
+			end
+		end
+	end
+	return false
+end

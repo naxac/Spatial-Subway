@@ -1,0 +1,360 @@
+local function log(fmt, ...)
+	get_console():execute("load ~ "..script_name().." : "..string.format(fmt, ...))
+	get_console():execute("flush")
+end
+local function abort(fmt, ...)
+	local reason = "ERROR! "..string.format(fmt, ...)
+	log(reason)
+	string.format('%s')
+end
+-----------------------------------------
+Frect.mul = function (rect, x, y)
+	if y==nil then y = x end
+	rect.x1 = rect.x1*x; rect.y1 = rect.y1*y;
+	rect.x2 = rect.x2*x; rect.y2 = rect.y2*y;
+	return rect
+end
+Frect.div = function (rect, x, y)
+	if y==nil then y = x end
+	rect.x1 = rect.x1/x; rect.y1 = rect.y1/y;
+	rect.x2 = rect.x2/x; rect.y2 = rect.y2/y;
+	return rect
+end
+Frect.width = function (rect)
+	return rect.x2 - rect.x1
+end
+Frect.height = function (rect)
+	return rect.y2 - rect.y1
+end
+-----------------------------------------
+
+-- Настройки управления
+local move_shift = 5	-- кол-во пикселей, на которое перемещается карта за апдейт
+local min_zoom = nil	-- минимальный масштаб (считается по ширине глобальной карты)
+local max_zoom = 5		-- максимальный масштаб
+local zoom_shift = 0.4	-- увеличение/уменьшение масштаба за один клик
+
+local map_st = {x=0, y=0}
+local scale = 1
+local iniCache = {}
+local kStretch = ( 1024/768 ) / ( device().width/device().height )
+
+class "UIPdaTeleport" (CUIScriptWnd)
+
+function UIPdaTeleport:__init() super()
+	self.level_maps = {}
+	self.anoms = {}
+	self.ini = ini_file("game_maps_single.ltx")
+	self.can_jump = false
+	
+	self:Init(0,0,1024,768)
+	local xml = CScriptXmlInit()
+	xml:ParseFile("ui_teleport.xml")
+	
+	xml:InitStatic("background", self)
+	
+	self.map_back = xml:InitStatic("map_static", self)
+	
+	local _st = xml:InitFrame("move_status", self)
+	local _tx = xml:InitStatic("move_status:sttext", _st)
+	if not has_alife_info("can_use_device") then
+		_tx:SetTextST("cant_jump_out_zone")
+		_tx:SetTextColor(255,255,0,0)
+	elseif not inventory.has_arts_on_belt() then
+		_tx:SetTextST("cant_jump_hasnt_art")
+		_tx:SetTextColor(255,255,0,0)
+	else
+		_tx:SetTextST("can_jump")
+		_tx:SetTextColor(255,0,255,0)
+		self.can_jump = true
+	end
+	
+	-- рисуем карту
+	self:DrawMap()
+	
+	-- рамка-ПДА
+	xml:InitStatic("pda", self)
+	self.map_name = xml:InitStatic("map_name", self)
+	
+	-- Кнопки навигации
+	xml:InitStatic("st_center", self)
+	
+	self:Register(xml:InitButton("btn_left",self), "btn_left")
+	self:AddCallback("btn_left", ui_events.BUTTON_DOWN, function() self.move = 1 end, self)
+	self:Register(xml:InitButton("btn_right",self), "btn_right")
+	self:AddCallback("btn_right", ui_events.BUTTON_DOWN, function() self.move = 2 end, self)
+	self:Register(xml:InitButton("btn_up",self), "btn_up")
+	self:AddCallback("btn_up", ui_events.BUTTON_DOWN, function() self.move = 3 end, self)
+	self:Register(xml:InitButton("btn_down",self), "btn_down")
+	self:AddCallback("btn_down", ui_events.BUTTON_DOWN, function() self.move = 4 end, self)
+	-- Зум
+	self:Register(xml:InitButton("btn_zoom_plus",self), "zoom_plus")
+	self:AddCallback("zoom_plus", ui_events.BUTTON_DOWN, self.ZoomPlus, self)
+	self:Register(xml:InitButton("btn_zoom_minus",self), "zoom_minus")
+	self:AddCallback("zoom_minus", ui_events.BUTTON_DOWN, self.ZoomMinus, self)
+	self:Register(xml:InitButton("btn_zoom_default",self), "zoom_default")
+	self:AddCallback("zoom_default", ui_events.BUTTON_DOWN,
+		function(wnd)
+			if scale~=min_zoom then
+				scale = min_zoom
+				wnd:ResizeMap()
+			end
+		end,
+	self)
+	-- Кнопка выхода
+	self:Register(xml:Init3tButton("btn_quit",self), "btn_quit")
+	self:AddCallback("btn_quit", ui_events.BUTTON_CLICKED, self.on_quit, self)
+end
+
+function UIPdaTeleport:ZoomPlus()
+	if scale<max_zoom then
+		scale = math.min(scale+zoom_shift, max_zoom)
+		self:ResizeMap()
+	end
+end
+
+function UIPdaTeleport:ZoomMinus()
+	if scale>min_zoom then
+		scale = math.max(scale-zoom_shift, min_zoom)
+		self:ResizeMap()
+	end
+end
+
+function UIPdaTeleport:DrawMap()
+	local texture, rect
+	-- Глобальная карта
+	rect = self:GetFrect("global_map", "bound_rect")
+	texture = self.ini:r_string("global_map", "texture")
+	
+	self.global_map = CUIStatic()
+	local gMap = self.global_map
+	gMap:SetAutoDelete(true)
+	gMap:SetWndRect(rect:mul(scale))
+	gMap:InitTexture(texture)
+	gMap:SetStretchTexture(true)
+	self.map_back:AttachChild(gMap)
+	
+	if min_zoom == nil then	-- first run only
+		min_zoom = self.map_back:GetWidth()/gMap:GetWidth()
+		if scale ~= min_zoom then
+			scale = min_zoom
+			gMap:SetWndRect(rect:mul(scale))
+		end
+	end
+	
+	map_st.mxr = -gMap:GetWidth() + self.map_back:GetWidth()
+	map_st.mxd = -gMap:GetHeight() + self.map_back:GetHeight()
+	
+	gMap:SetWndPos(map_st.x, map_st.y)
+	
+	-- Читаем из ini имена уровней
+	local res, map, val
+	local tmp = {}
+	for i = 0, self.ini:line_count("level_maps_single")-1 do
+		res, map, v = self.ini:r_line("level_maps_single",i,"","")
+		self.level_maps[string.lower(map)] = true
+	end
+	-- Рисуем карты  уровней и места положения аномалий
+	local actor_pos = db.actor:position()
+	local level_name = level.name()
+	local show_anom = scale>1.5
+	for k in pairs(self.level_maps) do
+		local level_map = self:DrawLevelMap(k)
+		gMap:AttachChild(level_map)
+		self.level_maps[k] = level_map
+		self:Register(level_map, "st_"..k)
+		self:AddCallback("st_"..k, ui_events.STATIC_FOCUS_RECEIVED,
+			function(wnd)
+				wnd.map_name:SetTextST(k)
+				wnd.map_in_focus = k
+			end,
+		self)
+		self:AddCallback("st_"..k, ui_events.STATIC_FOCUS_LOST,
+			function(wnd)
+				if wnd.map_in_focus == k then
+					wnd.map_name:SetTextST("global_map")
+				end
+			end,
+		self)
+		val = teleportator.levels[k]
+		if val and #val>0 then
+			rect = self:GetFrect(k, "bound_rect")
+			self.zoom = level_map:GetWidth()/rect:width()
+			for i,t in ipairs(val) do
+				local pos = self:ConvertPosToPixel(t.pos, rect)
+				local btn_name = "btn_"..k..i
+				local btn = CUIButton()
+				btn:SetAutoDelete(true)
+				btn:Init("teleport\\ui_pda_tele", pos.x-6, pos.y-6, 12, 12)
+				btn:SetOriginalRect(997,834,19,19)
+				btn:SetStretchTexture(true)
+				level_map:AttachChild(btn)
+				if level_name==k and actor_pos:distance_to(t.pos)<3 then
+					btn:SetColor(GetARGB(255,20,255,20))
+				elseif self.can_jump then
+					self:Register(btn, btn_name)
+					self:AddCallback(btn_name, ui_events.BUTTON_CLICKED, 
+						function(wnd)
+							wnd:on_quit()
+							if teleportator.remove_art() then
+								teleportator.start_small_timer(1.3, function() _G.block_tele_sms = nil end)
+								_G.block_tele_sms = true
+								level.add_pp_effector ("teleport.ppe", 2006, false)
+								local snd_obj = xr_sound.get_safe_sound_object("anomaly\\teleport_work_1")
+								snd_obj:play_no_feedback(db.actor, sound_object.s2d, 0, vector(), 1.0)
+								teleportator.start_small_timer(0.5, teleportator.go_to, k, i)
+							end
+						end,
+					self)
+				end
+				btn:Show(show_anom)
+				self.anoms[btn_name] = btn
+			end
+		end
+	end
+end
+
+function UIPdaTeleport:ResizeMap()
+	local rect = self:GetFrect("global_map", "bound_rect")
+	
+	local wnd = self.global_map
+	local oldW = wnd:GetWidth()
+	local oldH = wnd:GetHeight()
+	wnd:SetWndRect(rect:mul(scale))
+	local newW = wnd:GetWidth()
+	local newH = wnd:GetHeight()
+	
+	map_st.mxr = -newW + self.map_back:GetWidth()
+	map_st.mxd = -newH + self.map_back:GetHeight()
+	map_st.x = math.min(math.max(map_st.x*newW/oldW, map_st.mxr), 0)
+	map_st.y = math.min(math.max(map_st.y*newH/oldH, map_st.mxd), 0)
+	
+	wnd:SetWndPos(map_st.x, map_st.y)
+	
+	local show_anom = scale>1.5
+	local pos, v
+	for lvl,st in pairs(self.level_maps) do
+		rect = self:GetFrect(lvl, "global_rect")
+		st:SetWndRect(rect:mul(scale))
+		v = teleportator.levels[lvl]
+		if v and #v>0 then
+			rect = self:GetFrect(lvl, "bound_rect")
+			self.zoom = st:GetWidth()/rect:width()
+			for i,t in ipairs(v) do
+				pos = self:ConvertPosToPixel(t.pos, rect)
+				wnd = self.anoms["btn_"..lvl..i]
+				wnd:SetWndPos(pos.x, pos.y)
+				wnd:Show(show_anom)
+			end
+		end
+	end
+end
+
+function UIPdaTeleport:Update()
+	CUIScriptWnd.Update(self)
+	if not self.move then return end
+	if self.move == 1 then
+		map_st.x = math.min(map_st.x + move_shift, 0)
+	elseif self.move == 2 then
+		map_st.x = math.max(map_st.x - move_shift, map_st.mxr)
+	elseif self.move == 3 then
+		map_st.y =  math.min(map_st.y + move_shift, 0)
+	elseif self.move == 4 then
+		map_st.y = math.max(map_st.y - move_shift, map_st.mxd)
+	end
+	self.global_map:SetWndPos(map_st.x, map_st.y)
+end
+
+function UIPdaTeleport:DrawLevelMap(level)
+	if self.ini:section_exist(level) then
+		local tex, rect
+		if self.ini:line_exist(level, "texture") then
+			tex = self.ini:r_string(level, "texture")
+			rect = self:GetFrect(level, "global_rect")
+		else
+			tex = "ui\\ui_nomap2"
+			rect = Frect():set(-10,-10,0,0)
+		end
+		local st = CUIStatic()
+		st:SetAutoDelete(true)
+		st:SetWndRect(rect:mul(scale))
+		st:InitTexture(tex)
+		st:SetStretchTexture(true)
+		return st
+	end
+	abort("Section [%s] not exist in game_maps_single.ltx", tostring(level))
+end
+
+function UIPdaTeleport:ConvertPosToPixel(vec, rect)
+	local res = {}
+	res.x = (vec.x - rect.x1) *self.zoom
+	res.y = (rect:height() - (vec.z - rect.y1)) *self.zoom
+	return res
+end
+
+function UIPdaTeleport:GetFrect(section, line)
+	if iniCache[section] and iniCache[section][line] then
+		return Frect():set( unpack(iniCache[section][line]) )
+	else
+		if iniCache[section]==nil then iniCache[section] = {} end
+		iniCache[section][line] = {}
+		local t = iniCache[section][line]
+		if self.ini:section_exist(section) and self.ini:line_exist(section, line) then
+			for n in string.gmatch(self.ini:r_string(section, line), "[%d%-%.]+") do
+				t[#t+1] = tonumber(n)
+			end
+			if #t~=4 then abort("GetFrect: incorrect rect string: '%s'", str) end
+			t[1] = t[1]*kStretch
+			t[3] = t[3]*kStretch
+		else
+			for i=1,4 do t[#t+1] = i end
+		end
+		return Frect():set( unpack(t) )
+	end
+end
+
+local dik2move = {
+	[DIK_keys.DIK_LEFT] = 1,
+	[DIK_keys.DIK_RIGHT] = 2,
+	[DIK_keys.DIK_UP] = 3,
+	[DIK_keys.DIK_DOWN] = 4,
+	[DIK_keys.DIK_A] = 1,
+	[DIK_keys.DIK_D] = 2,
+	[DIK_keys.DIK_W] = 3,
+	[DIK_keys.DIK_S] = 4,
+	[DIK_keys.DIK_NUMPAD4] = 1,
+	[DIK_keys.DIK_NUMPAD6] = 2,
+	[DIK_keys.DIK_NUMPAD8] = 3,
+	[DIK_keys.DIK_NUMPAD2] = 4
+}
+function UIPdaTeleport:OnKeyboard(dik, keyboard_action)
+	if keyboard_action == ui_events.WINDOW_KEY_PRESSED then
+		if dik == DIK_keys.DIK_ESCAPE then
+			self:on_quit()
+		elseif dik2move[dik] then
+			self.move = dik2move[dik]
+		elseif dik == DIK_keys.DIK_LSHIFT then
+			move_shift = move_shift-3
+		elseif dik == DIK_keys.DIK_LCONTROL then
+			move_shift = move_shift+3
+		elseif dik == DIK_keys.DIK_SUBTRACT then
+			self:ZoomMinus()
+		elseif dik == DIK_keys.DIK_ADD then
+			self:ZoomPlus()
+		end
+	elseif keyboard_action == ui_events.WINDOW_KEY_RELEASED then
+		if dik == DIK_keys.DIK_LSHIFT then
+			move_shift = move_shift+3
+		elseif dik == DIK_keys.DIK_LCONTROL then
+			move_shift = move_shift-3
+		else
+			self.move = nil
+		end
+	end
+	return true
+end
+
+function UIPdaTeleport:on_quit()
+	self:GetHolder():start_stop_menu(self, true)
+end
+

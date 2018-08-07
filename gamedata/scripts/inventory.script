@@ -1,0 +1,168 @@
+need_update = true
+
+local belt = {}
+local belt_id = {}
+local belt_status = false
+local inventory_open = false
+local separator_spawned = false
+local separator = "separator"
+
+--local debug = false
+local flag
+
+function update(time)
+	teleportator.update(time)
+	
+	if (need_update == false) then return end
+
+--	if debug == true and belt_status == true then get_console():execute("belt_status=false") end
+	belt_status = false
+
+	local actor = db.actor
+	-- Спавним разделяющий елемент
+	if (separator_spawned == false) then
+		alife():create(separator,
+			actor:position(),
+			actor:level_vertex_id(),
+			actor:game_vertex_id(),
+			actor:id())
+		separator_spawned = true
+	--	if debug == true then get_console():execute("separator_spawned") end
+		return
+	end
+
+	belt = {}
+	belt_id = {}
+	flag = 0
+
+	-- Сканируем инвентарь
+	actor:inventory_for_each(scan_inv)
+	
+	need_update = false
+
+	-- Удаляем разделяющий елемент
+	actor:inventory_for_each(del_separator)
+	separator_spawned = false
+
+--	if debug == true and belt_status == false then get_console():execute("belt_status=true") end
+	belt_status = true
+--[[
+	if debug == true then
+		for i,k in pairs(belt) do
+			get_console():execute(i.."="..k)
+		end
+	end
+	]]
+end
+
+-- Перебор предметов инвентаря
+function scan_inv(item)
+	local section = item:section()
+
+	if section == separator then
+		flag = 1
+		return
+	end
+
+	if flag == 1 then
+		if slot_item(item) ~= nil then
+			flag = 2
+		else
+			if belt[section] then belt[section] = belt[section] + 1
+			else belt[section] = 1 end
+			belt_id[item:id()] = true
+		end
+	end
+end
+
+-- Удаление разделяющего предмета
+function del_separator(item)
+	if item:section() == separator then
+		alife():release(alife():object(item:id()), true)
+	--	if debug == true then get_console():execute("separator_removed") end
+	end
+end
+
+-- Определение налечия предмета в одном из слотов
+function slot_item(item)
+	for i=0,12 do
+		local obj = db.actor:item_in_slot(i)
+		if obj and item:id() == obj:id() then
+			return i
+		end
+	end
+
+	return nil
+end
+
+-- Поднятие предмета
+function on_item_take(item)
+	if item:section() == separator then return end
+
+	if (inventory_open == false) then
+		if (separator_spawned == true) then
+			db.actor:inventory_for_each(del_separator)
+			separator_spawned = false
+		end
+
+		need_update = true
+	--	if debug == true then get_console():execute("item_take") end
+	end
+end
+
+-- Выброс предмета
+function on_item_drop(item)
+	if item:section() == separator then return end
+
+	if (inventory_open == false) then
+		if (separator_spawned == true) then
+			db.actor:inventory_for_each(del_separator)
+			separator_spawned = false
+		end
+
+		need_update = true
+	--	if debug == true then get_console():execute("item_drop") end
+	end
+end
+
+-- Открытие/закрытие инвентаря
+function on_inventory_info(info_id)
+	if info_id == "ui_inventory" then
+		inventory_open = true
+	--	if debug == true then get_console():execute("inventory_open") end
+
+	elseif info_id == "ui_inventory_hide" then
+		inventory_open = false
+		need_update = true
+	--	if debug == true then get_console():execute("inventory_close") end
+	end
+end
+
+
+-- предмет на поясе (проверка по секции)
+function on_belt(sect)
+	return belt[sect]
+end
+-- предмет на поясе (проверка по game_object)
+function item_on_belt(item)
+	return belt_id[item:id()]~=nil
+end
+-- кол-во предметов на поясе
+function belt_count()
+	local n = 0
+	for _ in pairs(belt_id) do
+		n = n + 1
+	end
+	return n
+end
+-- проверка наличия артефактов на поясе
+function has_arts_on_belt()
+	local art_clsids = {[clsid.artefact_s] = true, [clsid.artefact] = true}
+	local sys_ini = system_ini()
+	for k,v in pairs(belt) do
+		if art_clsids[sys_ini:r_clsid(k, 'class')] then
+			return true
+		end
+	end
+	return false
+end

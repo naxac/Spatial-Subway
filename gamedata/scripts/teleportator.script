@@ -1,0 +1,415 @@
+local function log(fmt, ...)
+	get_console():execute("load ~ "..script_name().." : "..string.format(fmt, ...))
+	get_console():execute("flush")
+end
+local function abort(fmt, ...)
+	local reason = "ERROR! "..string.format(fmt, ...)
+	log(reason)
+	string.format('%s')
+end
+
+-- ѕри добавлении локации в таблицу об€зательно добавить инфопоршен: <им€_локации>_teleport
+levels = {
+l01_escape = {},
+l02_garbage = {},
+l03_agroprom = {},
+l04_darkvalley = {},
+l05_bar = {},
+l06_rostok = {},
+l07_military = {},
+l08_yantar = {},
+l10_radar = {},
+l11_pripyat = {},
+l12_stancia = {},
+l12_stancia_2 = {}
+}
+
+local math_random = math.random
+local table_insert = table.insert
+local tmp_pos, vertexes
+
+function getVertexes(level)
+	local t_lv,t_gv = {},{}
+	local i,v,ln = 0,0,""
+	local sim = alife()
+	local gg = game_graph()
+	while gg:valid_vertex_id(i) do
+		v = gg:vertex(i)
+		ln = sim:level_name(v:level_id())
+		if ln == level then
+			t_lv[#t_lv+1] = v:level_vertex_id()
+			t_gv[#t_gv+1] = i
+		end
+		i = i + 1
+	end
+	vertexes = {}
+	vertexes.gv1 = math.min(unpack(t_gv))
+	vertexes.gv2 = math.max(unpack(t_gv))
+	vertexes.lv = math.max(unpack(t_lv))
+end
+
+function on_net_spawn()
+	math.randomseed(device():time_global())
+	
+	local sim = alife()
+	local lname = level.name()
+	
+	local se_obj = sim:story_object(30000)
+	if se_obj then
+		sim:release(se_obj, true)
+	end
+	
+	if levels[lname] and not has_alife_info(lname.."_teleport") then
+		db.actor:give_info_portion(lname.."_teleport")
+		
+		getVertexes(lname)
+		tmp_pos = {}
+		
+		local cnt = math_random(6,10)
+		while cnt > 0 do
+			if spawn_teleport(lname) then cnt = cnt - 1 end
+		end
+		
+		if not has_alife_info("first_run_teleport") then
+			local a = db.actor
+			a:give_info_portion("first_run_teleport")
+			sim:create("device_teleport",
+						a:position(),
+						a:level_vertex_id(),
+						a:game_vertex_id(),
+						a:id())
+		end
+	end
+	
+	local gv,ln
+	local gg = game_graph()
+	for i=1, 65534 do
+		se_obj = sim:object(i)
+		if se_obj and se_obj:section_name() == 'zone_tele_naxac' then
+			gv = se_obj.m_game_vertex_id
+			ln = sim:level_name(gg:vertex(gv):level_id())
+			if levels[ln] then
+				table_insert(levels[ln], {pos = se_obj.position, lv = se_obj.m_level_vertex_id, gv = gv})
+			end
+		end
+	end
+	
+	vertexes, tmp_pos = nil, nil
+	
+	teleportator.start_small_timer(2, function() _G.block_tele_sms = nil end)
+	_G.block_tele_sms = true
+	
+	-- если подспавн артефктов не нужен - просто удалить скрипт 'arts_spawn'
+	if arts_spawn then arts_spawn.spawn_artefacts(lname) end
+end
+
+function spawn_teleport(lvl)
+	local new_lv = math_random(1,vertexes.lv)
+	local pos = level.vertex_position(new_lv)
+	
+	if db.actor:position():distance_to(pos) < 10 then return false end
+	for _,p in ipairs(tmp_pos) do
+		if p:distance_to(pos) < 60 then return false end
+	end
+	
+	local new_gv,dist = 0,0
+	local min_dist = 100000
+	local gg = game_graph()
+	for a = vertexes.gv1, vertexes.gv2 do
+		dist = gg:vertex(a):game_point():distance_to(pos)
+		if dist<min_dist then
+			min_dist = dist
+			new_gv = a
+		end
+	end
+	if gg:valid_vertex_id(new_gv) then
+		table_insert(tmp_pos, pos)
+		local sobj = alife():create("space_restrictor", pos, new_lv, new_gv)
+		local custom = 	"[logic]\n"..
+						"active = sr_idle\n"..
+						"[sr_idle]\n"..
+						"on_actor_inside = {=item_on_belt(device_teleport)} sr_timer %=send_teleport(t_found_new)%\n"..
+						
+						"[sr_timer]\n"..
+						"type = dec\n"..
+						"start_value = "..tostring(math_random(12,20)).."000\n"..
+						"string = st_scan_teleport\n"..
+						"on_value = 0| nil %=send_teleport(t_scan_finish) =add_new_teleport%\n"..
+						"on_info = {!item_on_belt(device_teleport)} sr_idle %=send_teleport(t_scan_fail_device)%\n"..
+						"on_actor_outside = sr_idle %=send_teleport(t_scan_fail)%"
+		teleportator.rewrite_restrictor(sobj, custom, 3.0)
+	--	level.map_add_object_spot_ser(sobj.id, 'blue_location', sobj:name())
+		return true
+	end
+	return false
+end
+
+function check_item(obj)
+	if obj:section()=="device_teleport" then
+		inventory.need_update = true
+		if level.main_input_receiver() then
+			level.start_stop_menu(level.main_input_receiver(), true)
+		end
+		
+		alife():create("device_teleport", db.actor:position(), db.actor:level_vertex_id(), db.actor:game_vertex_id(), db.actor:id())
+		-- таймер, чтобы успел отработать апдейт в inventory
+		this.start_small_timer(0.3,
+			function()
+				local hud = ui_teleportator.UIPdaTeleport(get_hud())
+				level.start_stop_menu(hud, true)
+			end
+		)
+	end
+end
+---------------------------------------------------------------------------------------
+function remove_art()
+	local art_clsids = {[clsid.artefact_s] = true, [clsid.artefact] = true}
+	local del_item, item_cost
+	local min_cost = 1000000
+	db.actor:iterate_inventory(function(dummy, item)
+		if art_clsids[item:clsid()] and inventory.item_on_belt(item) then
+			item_cost = item:cost()
+			if item_cost<min_cost then	
+				del_item = item
+				min_cost = item_cost
+			end
+		end
+	end,
+	db.actor)
+	if del_item then
+		news_manager.relocate_item(db.actor, "out", del_item:section())
+		alife():release(alife():object(del_item:id()), true)
+		return true
+	end
+	news_manager.send_tip(db.actor, "ѕространственный сканер:\\n%c[255,255,127,150]ƒл€ перемещени€ поместите на по€с любой артефакт.")
+	return false
+end
+
+function go_to(lname, i)
+	local actor = db.actor
+--	log("go_to: %s-%s", tostring(lname), tostring(i))
+	local point = levels[lname][i] or abort("teleportator: not exist coordinates for level '%s', index [%s]", tostring(lname), tostring(i))
+	if lname == level.name() then
+		actor:set_actor_position(point.pos)
+	else
+		this.create_level_changer(30000, actor:position(),
+								  actor:level_vertex_id(), actor:game_vertex_id(),
+								  point.lv, point.gv, point.pos, vector():set(0,0,0), lname, 1)
+	end
+end
+---------------------------------------------------------------------------------------
+--  ороткий несохран€емый таймер в реальном времени
+local timers = {}
+function update(time)
+	for k,v in pairs(timers) do
+		if time>v.time then
+			v.func(unpack(v.params))
+			timers[k] = nil
+		end
+	end
+end
+
+local t_cnt = 0
+function start_small_timer(delay, func, ...)
+	local t = {}
+	t.time = delay*1000 + time_global()
+	t.func = func
+	t.params = {...}
+	timers["tmr"..t_cnt] = t
+	t_cnt = t_cnt + 1
+end
+---------------------------------------------------------------------------------------
+----------
+-- чтение формы из нет-пакета
+----------
+function r_shape(packet)
+	local s
+	local st = {}
+	st.count = packet:r_u8()
+	st.shapes = {}
+	for i=1, st.count do
+		s = {}
+		s.type = packet:r_u8()
+		if s.type == 0 then
+			s.center = packet:r_vec3()
+			s.radius = packet:r_float()
+		else
+			s.axis_x = packet:r_vec3()
+			s.axis_y = packet:r_vec3()
+			s.axis_z = packet:r_vec3()
+			s.offset = packet:r_vec3()
+		end
+		st.shapes[i] = s
+	end
+	return st
+end
+
+----------
+-- запись формы в нет-пакет
+----------
+function w_shape(packet, st)
+	local s
+	packet:w_u8(st.count)
+	for i=1, st.count do
+		s = st.shapes[i]
+		packet:w_u8(s.type)
+		if s.type == 0 then
+			packet:w_vec3(s.center)
+			packet:w_float(s.radius)
+		else
+			packet:w_vec3(s.axis_x)
+			packet:w_vec3(s.axis_y)
+			packet:w_vec3(s.axis_z)
+			packet:w_vec3(s.offset)
+		end
+	end
+end
+
+----------
+-- перепаковка нет-пакета созданного скриптом рестрикта
+----------
+function rewrite_restrictor(se_obj,	-- серверный объект рестриктора
+							custom,	-- кастом дата
+							radius,	-- радиус
+							sid)	-- story_id, если потом нужно будет ещЄ что-то делать с рестриктором
+	local packet = net_packet()
+	se_obj:STATE_Write(packet)
+	local game_vertex_id	= packet:r_u16()
+	local distance		= packet:r_float()
+	local direct_control	= packet:r_s32()
+	local level_vertex_id	= packet:r_s32()
+	local object_flags		= packet:r_s32()
+	local custom_data		= packet:r_stringZ()
+	local story_id		= packet:r_s32()
+	local spawn_story_id	= packet:r_s32()
+	local shape		= r_shape(packet)
+	local restrictor_type	= packet:r_u8()
+
+	shape = {}
+	shape.count = 1
+	shape.shapes = {}
+	shape.shapes[1] = {}
+	shape.shapes[1].type = 0
+	shape.shapes[1].center = vector():set(0,0,0)
+	shape.shapes[1].radius = radius or 1.0
+
+	packet:w_u16(game_vertex_id)
+	packet:w_float(distance)
+	packet:w_s32(direct_control)
+	packet:w_s32(level_vertex_id)
+	packet:w_s32(object_flags)
+	packet:w_stringZ(custom or custom_data)
+	packet:w_s32(sid or story_id)
+	packet:w_s32(spawn_story_id)
+	w_shape(packet, shape)
+	packet:w_u8(restrictor_type)
+	se_obj:STATE_Read(packet, packet:w_tell() - packet:r_tell())
+end
+
+
+function create_level_changer(
+				p_story_id,			-- story_id нового level_changer
+				p_positon,			-- координаты, где будет располагатьс€ level_changer
+				p_lvertex_id,		-- level_vertex_id level_changer'a
+				p_gvertex_id,		-- game_vertex_id level_changer'a
+				
+				p_dest_lv,			-- level_vertex_id уровн€, на который переходим
+				p_dest_gv,			-- game_vertex_id уровн€, на который переходим
+				p_dest_pos,			-- координаты уровн€, на который переходим
+				p_dest_dir,			-- направление взгл€да после перехода
+				p_dest_level,		-- название уровн€, на который переходим
+				p_silent			-- следует задать 1, чобы пдавить вопрос о смене уровн€ (автоматический переход)
+				)
+	
+	local obj = alife():create("level_changer", p_positon, p_lvertex_id, p_gvertex_id)
+	
+	local packet = net_packet()
+	obj:STATE_Write(packet)
+	
+	-- свойства cse_alife_object
+	local game_vertex_id = packet:r_u16()
+	local cse_alife_object__unk1_f32 = packet:r_float()
+	local cse_alife_object__unk2_u32 = packet:r_u32()
+	local level_vertex_id = packet:r_u32()
+	local object_flags = packet:r_u32()
+	local custom_data = packet:r_stringZ()
+	local story_id = packet:r_u32()
+	local spawn_story_id = packet:r_u32()
+	
+	-- свойства cse_shape
+	local shape_count = packet:r_u8()
+	for i=1,shape_count do
+		local shape_type = packet:r_u8()
+		if shape_type == 0 then
+			-- sphere
+			local center = packet:r_vec3()
+			local radius = packet:r_float()
+		else
+			-- box
+			local axis_x_x = packet:r_float()
+			local axis_x_y = packet:r_float()
+			local axis_x_z = packet:r_float()
+			local axis_y_x = packet:r_float()
+			local axis_y_y = packet:r_float()
+			local axis_y_z = packet:r_float()
+			local axis_z_x = packet:r_float()
+			local axis_z_y = packet:r_float()
+			local axis_z_z = packet:r_float()
+			local offset_x = packet:r_float()
+			local offset_y = packet:r_float()
+			local offset_z = packet:r_float()
+		end
+	end
+	
+	-- свойства cse_alife_space_restrictor
+	local restrictor_type = packet:r_u8()
+	
+	-- свойства cse_level_changer
+	local dest_game_vertex_id = packet:r_u16()
+	local dest_level_vertex_id = packet:r_u32()
+	local dest_position = packet:r_vec3()
+	local dest_direction = packet:r_vec3()
+	local dest_level_name = packet:r_stringZ()
+	local dest_graph_point = packet:r_stringZ()
+	local silent_mode = packet:r_u8()
+	
+	packet:w_begin(game_vertex_i)
+	packet:w_float(cse_alife_object__unk1_f32)
+	packet:w_u32(cse_alife_object__unk2_u32)
+	packet:w_u32(level_vertex_id)
+	packet:w_u32( bit_not(193) )
+	packet:w_stringZ(custom_data)
+	packet:w_u32(p_story_id)
+	packet:w_u32(spawn_story_id)
+	
+	packet:w_u8(1)
+	--packet:w_u8(0)				-- sphere
+	--packet:w_vec3(vector():set(0,0,0)
+	--packet:w_float(3.0)
+	packet:w_u8(1)					-- box
+	packet:w_float(2)
+	packet:w_float(0)
+	packet:w_float(0)
+	packet:w_float(0)
+	packet:w_float(4)
+	packet:w_float(0)
+	packet:w_float(0)
+	packet:w_float(0)
+	packet:w_float(4)
+	packet:w_float(0)
+	packet:w_float(0)
+	packet:w_float(0)
+	
+	packet:w_u8(3)					-- restrictor_type
+	
+	packet:w_u16(p_dest_gv)
+	packet:w_s32(p_dest_lv)
+	packet:w_vec3(p_dest_pos)
+	packet:w_vec3(p_dest_dir)
+	packet:w_stringZ(p_dest_level)
+	packet:w_stringZ("start_actor_99")
+	packet:w_u8(p_silent)
+	
+	packet:r_seek(0)
+	obj:STATE_Read(packet,packet:w_tell())
+end
