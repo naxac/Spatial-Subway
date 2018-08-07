@@ -1,0 +1,16 @@
+	<info_portion id="first_run_teleport"></info_portion>
+	<info_portion id="can_use_device"></info_portion>
+	<info_portion id="freeplay_start"></info_portion>
+	
+	<info_portion id="l01_escape_teleport"></info_portion>
+	<info_portion id="l02_garbage_teleport"></info_portion>
+	<info_portion id="l03_agroprom_teleport"></info_portion>
+	<info_portion id="l04_darkvalley_teleport"></info_portion>
+	<info_portion id="l05_bar_teleport"></info_portion>
+	<info_portion id="l06_rostok_teleport"></info_portion>
+	<info_portion id="l07_military_teleport"></info_portion>
+	<info_portion id="l08_yantar_teleport"></info_portion>
+	<info_portion id="l10_radar_teleport"></info_portion>
+	<info_portion id="l11_pripyat_teleport"></info_portion>
+	<info_portion id="l12_stancia_teleport"></info_portion>
+	<info_portion id="l12_stancia_2_teleport"></info_portion>
