@@ -1,3 +1,4 @@
+-- -*- mode: lua; encoding: windows-1251 -*-
 local function log(fmt, ...)
 	get_console():execute("load ~ "..script_name().." : "..string.format(fmt, ...))
 	get_console():execute("flush")
@@ -13,42 +14,84 @@ local anom_classes = {
 	[clsid.zone_mincer_s] = true,
 	[clsid.zone_mosquito_bald] = true
 }
+local sys_ini = system_ini()
 
 -- читаем, что спавнить и с какой вероятностью, из конфигов аномалий
-function spawn_artefacts(lname)
-	local math_random = math.random
-	if math_random() > 0.4 then return end
+function spawn_artefact(obj)
+	if not anom_classes[obj:clsid()] then return false end
+	if math.random() > 0.4 then return false end
+	if alife():level_name(game_graph():vertex(obj.m_game_vertex_id):level_id()) ~= level.name() then
+		return false
+	end
 	
-	local ini = system_ini()
-	local sim = alife()
-	local gg = game_graph()
-	local obj, sect
-	for i=1,65534 do
-		obj = sim:object(i)		-- по серверным объектам, т.к. в онлайн аномалии выходят позже актера
-		if obj and anom_classes[obj:clsid()] then
-			if sim:level_name(gg:vertex(obj.m_game_vertex_id):level_id())==lname then
-				sect = obj:section_name()
-			--	log("spawn_artefacts: %s", obj:name())
-				if ini:r_float(sect, "BirthProbability")>math_random() then
-					local arts = ini:r_string(sect, "artefacts")
-					local prob = {}
-				--	log("arts = %s", arts)
-					for a, n in string.gmatch(arts, "([%w_%-]+)%s*,%s*([%d%.]+)") do
-						prob[a] = tonumber(n)
-					--	log("prob: [%s] = %s", a, n)
-					end
-					for k,v in pairs(prob)do
-						if v > math_random() then
-							local sobj = sim:create(k, obj.position:add(vector():set(0,1,0)),
-											obj.m_level_vertex_id, obj.m_game_vertex_id)
-						--	level.map_add_object_spot_ser(sobj.id, "red_location", sobj:name())
-						--	log("spawn "..sobj:name())
-							return true
-						end
-					end
-				end
+	local sect = obj:section_name()
+	-- log("spawn_artefacts: %s", obj:name())
+	if sys_ini:r_float(sect, "BirthProbability")>math.random() then
+		local arts = sys_ini:r_string(sect, "artefacts")
+		local prob = {}
+		-- log("arts = %s", arts)
+		for a, n in string.gmatch(arts, "([%w_%-]+)%s*,%s*([%d%.]+)") do
+			prob[a] = tonumber(n)
+			-- log("prob: [%s] = %s", a, n)
+		end
+		for k,v in pairs(prob)do
+			if v > math.random() then
+				local sobj = alife():create(k, obj.position:add(vector():set(0,1,0)),
+						obj.m_level_vertex_id, obj.m_game_vertex_id)
+				-- level.map_add_object_spot_ser(sobj.id, "red_location", sobj:name())
+				-- log("spawn "..sobj:name())
+				this.del_ai_flag(sobj)
+				return true
 			end
 		end
 	end
 	return false
+end
+
+-- чтобы арты под текстуры не проваливались
+function del_ai_flag( obj )
+	if obj == nil then return end
+
+	local pk = net_packet()
+	pk:w_begin( 0 )
+	obj:STATE_Write( pk )
+	pk:r_seek( 2 )
+
+	local data = {}
+	-- cse_alife_object
+	data.game_vertex_id = pk:r_u16()
+	data.distance              = pk:r_float()
+	data.direct_control    = pk:r_s32()
+	data.level_vertex_id  = pk:r_s32()
+	data.object_flags       = pk:r_s32()
+	data.custom_data     = pk:r_stringZ()
+	data.story_id              = pk:r_s32()
+	data.spawn_story_id = pk:r_s32()
+	-- cse_visual
+	data.visual_name  = pk:r_stringZ()
+	data.visual_flags   = pk:r_u8()
+	-- cse_alife_item
+	data.condition       = pk:r_float()
+
+	-- сбрасываем флаг "UsedAi_Locations"
+	data.object_flags = bit_and( data.object_flags, bit_not(128) )
+
+	pk:w_begin( 0 )
+	-- cse_alife_object
+	pk:w_u16     ( data.game_vertex_id )
+	pk:w_float   ( data.distance )
+	pk:w_s32     ( data.direct_control )
+	pk:w_s32     ( data.level_vertex_id )
+	pk:w_s32     ( data.object_flags )
+	pk:w_stringZ ( data.custom_data )
+	pk:w_s32     ( data.story_id)
+	pk:w_s32     ( data.spawn_story_id )
+	-- cse_visual
+	pk:w_stringZ ( data.visual_name )
+	pk:w_u8        ( data.visual_flags )
+	-- cse_alife_item
+	pk:w_float    ( data.condition )
+
+	pk:r_seek( 2 )
+	obj:STATE_Read( pk, pk:w_tell() )
 end
