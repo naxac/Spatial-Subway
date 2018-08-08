@@ -1,3 +1,4 @@
+-- -*- mode: lua; encoding: windows-1251 -*-
 local function log(fmt, ...)
 	get_console():execute("load ~ "..script_name().." : "..string.format(fmt, ...))
 	get_console():execute("flush")
@@ -85,22 +86,23 @@ function on_net_spawn()
 	local gg = game_graph()
 	for i=1, 65534 do
 		se_obj = sim:object(i)
-		if se_obj and se_obj:section_name() == 'zone_tele_naxac' then
-			gv = se_obj.m_game_vertex_id
-			ln = sim:level_name(gg:vertex(gv):level_id())
-			if levels[ln] then
-				table_insert(levels[ln], {pos = se_obj.position, lv = se_obj.m_level_vertex_id, gv = gv})
+		if se_obj then
+			if se_obj:section_name() == 'zone_tele_naxac' then
+				gv = se_obj.m_game_vertex_id
+				ln = sim:level_name(gg:vertex(gv):level_id())
+				if levels[ln] then
+					table_insert(levels[ln], {pos = se_obj.position, lv = se_obj.m_level_vertex_id, gv = gv})
+				end
+			-- если подспавн артефктов не нужен - просто удалить скрипт 'arts_spawn'
+			elseif arts_spawn then
+				arts_spawn.spawn_artefact(se_obj)
 			end
 		end
 	end
 	
 	vertexes, tmp_pos = nil, nil
 	
-	teleportator.start_small_timer(2, function() _G.block_tele_sms = nil end)
-	_G.block_tele_sms = true
-	
-	-- если подспавн артефктов не нужен - просто удалить скрипт 'arts_spawn'
-	if arts_spawn then arts_spawn.spawn_artefacts(lname) end
+	this.shift_tele_sms(2)
 end
 
 function spawn_teleport(lvl)
@@ -197,6 +199,26 @@ function go_to(lname, i)
 								  point.lv, point.gv, point.pos, vector():set(0,0,0), lname, 1)
 	end
 end
+
+-- если есть найденные аномалии вне ЧАЭС, то стартуем фриплей
+function exit_from_aes()
+	local tmp = {}
+	for lvl, t in pairs(levels) do
+		if string.find(lvl, "l12_stancia") == nil then
+			for i, v in ipairs(t) do
+				table.insert(tmp, {lvl, i})
+			end
+		end
+	end
+	if #tmp > 0 then
+		db.actor:give_info_portion("freeplay_start")
+		local p = tmp[math.random(#tmp)]
+		this.go_to(unpack(p))
+	else
+		db.gameover_credits_started = true
+		game.start_tutorial("credits_seq")
+	end
+end
 ---------------------------------------------------------------------------------------
 -- Короткий несохраняемый таймер в реальном времени
 local timers = {}
@@ -217,6 +239,11 @@ function start_small_timer(delay, func, ...)
 	t.params = {...}
 	timers["tmr"..t_cnt] = t
 	t_cnt = t_cnt + 1
+end
+
+function shift_tele_sms(sec)
+	teleportator.start_small_timer(sec, function() _G.block_tele_sms = nil end)
+	_G.block_tele_sms = true
 end
 ---------------------------------------------------------------------------------------
 ----------
