@@ -1,3 +1,4 @@
+-- -*- mode: lua; encoding: windows-1251 -*-
 -- ----------------------------------------------------------------------------------------------------
 -- Общие функции
 -- ----------------------------------------------------------------------------------------------------
@@ -20,8 +21,7 @@ function add_new_teleport(actor, zone)
 	teleportator.rewrite_restrictor(sobj, custom, 3.0)
 	level.map_add_object_spot_ser(sobj.id, "crlc_small", "Пространственный тоннель")
 	
-	teleportator.start_small_timer(0.8, function() _G.block_tele_sms = nil end)
-	_G.block_tele_sms = true
+	teleportator.shift_tele_sms(1)
 	
 	table.insert(teleportator.levels[level.name()], {pos = sobj.position, lv = sobj.m_level_vertex_id, gv = sobj.m_game_vertex_id})
 	
@@ -2050,8 +2050,7 @@ end
 function game_credits(actor, npc)
 --	db.gameover_credits_started = true
 --	game.start_tutorial("credits_seq")
-	db.actor:give_info_portion("freeplay_start")
-	teleportator.go_to("aes"..tostring(math.random(12,22)))
+	teleportator.exit_from_aes()
 end
 
 function game_over(actor, npc)
