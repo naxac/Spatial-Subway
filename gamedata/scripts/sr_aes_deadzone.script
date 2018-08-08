@@ -1,3 +1,4 @@
+-- -*- mode: lua; encoding: windows-1251 -*-
 --[[------------------------------------------------------------------------------------------------
 Зона смерти на ЧАЭС (2)
 --------------------------------------------------------------------------------------------------]]
@@ -83,8 +84,6 @@ function action_postprocess:deactivate()
 end
 -------------------
 function action_postprocess:update_params ()
-	if self.shift then return end
-    
 	local c_time = (time_global () - self.old_time) * 0.001
 	self.old_time = time_global ()
 	
@@ -117,7 +116,7 @@ function action_postprocess:update (delta)
 	if xr_logic.try_switch_to_another_section (self.object, self.st, db.actor) or self.shift then
 		return
 	end
-	
+	if if self.shift then return end
 	self.actor_inside = self.object:inside (db.actor:position ())
 	
 	--if self.actor_inside == true then
