@@ -2,33 +2,6 @@
 -- ----------------------------------------------------------------------------------------------------
 -- Общие функции
 -- ----------------------------------------------------------------------------------------------------
-function send_teleport(actor, zone, p)
-	if block_tele_sms then return end
-	local txt = p[1] and game.translate_string(p[1]) or abort("xr_effects: invalid parameter for function 'send_new_teleport'")
-	news_manager.send_tip(actor, "Пространственный сканер:\\n%c[255,255,127,150]"..txt)
-end
-
-function add_new_teleport(actor, zone)
-	local sobj = alife():create("zone_tele_naxac", zone:position(), zone:level_vertex_id(), zone:game_vertex_id())
-	local custom =	"[logic]\n"..
-					"active = sr_idle@1\n"..
-					"[sr_idle@1]\n"..
-					"on_actor_inside = {=actor_has_item(device_teleport)} sr_idle@2 %+can_use_device =send_teleport(t_in_zone)%\n"..
-					"[sr_idle@2]\n"..
-					"on_actor_outside = sr_idle@1 %-can_use_device =send_teleport(t_out_zone)%\n"..
-					"on_info = {!actor_has_item(device_teleport)} sr_idle@1 %-can_use_device%\n"..
-					"on_info2 = {-can_use_device} %+can_use_device%"
-	teleportator.rewrite_restrictor(sobj, custom, 3.0)
-	level.map_add_object_spot_ser(sobj.id, "crlc_small", "Пространственный тоннель")
-	
-	teleportator.shift_tele_sms(1)
-	
-	table.insert(teleportator.levels[level.name()], {pos = sobj.position, lv = sobj.m_level_vertex_id, gv = sobj.m_game_vertex_id})
-	
-	alife():release(alife():object(zone:id()))
-end
-
-
 function disable_ui_elements(actor, npc, p)
     local i, v = 0, 0
     for i, v in pairs(p) do

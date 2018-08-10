@@ -49,7 +49,7 @@ local kStretch = ( 1024/768 ) / ( device().width/device().height )  -- коэффицие
 
 class "UIPdaTeleport" (CUIScriptWnd)
 
-function UIPdaTeleport:__init() super()
+function UIPdaTeleport:__init(in_zone) super()
 	self.level_maps = {}
 	self.anoms = {}
 	self.ini = ini_file("game_maps_single.ltx")
@@ -67,7 +67,7 @@ function UIPdaTeleport:__init() super()
 	
 	local _st = xml:InitFrame("move_status", self)
 	local _tx = xml:InitStatic("move_status:sttext", _st)
-	if not has_alife_info("can_use_device") then
+	if not in_zone then
 		_tx:SetTextST("cant_jump_out_zone")
 		_tx:SetTextColor(255,255,0,0)
 	elseif not inventory.has_arts_on_belt() then
@@ -157,7 +157,7 @@ function UIPdaTeleport:DrawMap()
 	gMap:SetWndPos(map_st.x, map_st.y)
 	
 	-- Читаем из ini имена уровней
-	local res, map, val
+	local res, map, v
 	local tmp = {}
 	for i = 0, self.ini:line_count("level_maps_single")-1 do
 		res, map, v = self.ini:r_line("level_maps_single",i,"","")
@@ -175,11 +175,11 @@ function UIPdaTeleport:DrawMap()
 		self:Register(level_map, "st_"..k)
 		self:AddCallback("st_"..k, ui_events.STATIC_FOCUS_RECEIVED, this.onMapFocus, { wnd = self, map = k } )
 		self:AddCallback("st_"..k, ui_events.STATIC_FOCUS_LOST, this.onMapFocusLost, { wnd = self, map = k } )
-		val = teleportator.levels[k]
-		if val and #val>0 then
+		local zones = teleportator.levels[k]
+		if zones then
 			rect = self:GetFrect(k, "bound_rect")
 			self.zoom = level_map:GetWidth()/rect:width()
-			for i,t in ipairs(val) do
+			for i, t in pairs(zones) do
 				local pos = self:ConvertPosToPixel(t.pos, rect)
 				local btn_name = "btn_"..k..i
 				local btn = CUIButton()
@@ -188,11 +188,11 @@ function UIPdaTeleport:DrawMap()
 				btn:SetOriginalRect(997,834,19,19)
 				btn:SetStretchTexture(true)
 				level_map:AttachChild(btn)
-				if level_name==k and actor_pos:distance_to(t.pos)<3 then
+				if level_name==k and actor_pos:distance_to(t.pos)<2.5 then
 					btn:SetColor(GetARGB(255,20,255,20))
 				elseif self.can_jump then
 					self:Register(btn, btn_name)
-					self:AddCallback(btn_name, ui_events.BUTTON_CLICKED, this.onAnomalyClicked, { wnd = self, lvl = k, index = i } )
+					self:AddCallback(btn_name, ui_events.BUTTON_CLICKED, this.onAnomalyClicked, { wnd = self, lvl = k, id = i } )
 				end
 				btn:Show(show_anom)
 				self.anoms[btn_name] = btn
@@ -213,12 +213,10 @@ end
 function onAnomalyClicked( t )
 	t.wnd:on_quit()
 	if teleportator.remove_art() then
-		teleportator.start_small_timer(1.3, function() _G.block_tele_sms = nil end)
-		_G.block_tele_sms = true
 		level.add_pp_effector ("teleport.ppe", 2006, false)
 		local snd_obj = xr_sound.get_safe_sound_object("anomaly\\teleport_work_1")
 		snd_obj:play_no_feedback(db.actor, sound_object.s2d, 0, vector(), 1.0)
-		teleportator.start_small_timer(0.5, teleportator.go_to, t.lvl, t.index)
+		teleportator.start_small_timer(0.5, teleportator.go_to, t.lvl, t.id)
 	end
 end
 
@@ -250,9 +248,9 @@ function UIPdaTeleport:ResizeMap()
 			self.zoom = st:GetWidth()/rect:width()
 			for i,t in ipairs(v) do
 				pos = self:ConvertPosToPixel(t.pos, rect)
-				wnd = self.anoms["btn_"..lvl..i]
-				wnd:SetWndPos(pos.x, pos.y)
-				wnd:Show(show_anom)
+				local b = self.anoms["btn_"..lvl..i]
+				b:SetWndPos(pos.x, pos.y)
+				b:Show(show_anom)
 			end
 		end
 	end
@@ -300,7 +298,7 @@ function UIPdaTeleport:GetFrect(section, line)
 			t[1] = t[1]*kStretch
 			t[3] = t[3]*kStretch
 		else
-			for i=1,4 do t[#t+1] = i end
+			t = { -10, -10, 0, 0 }
 		end
 		return Frect():set( unpack(t) )
 	end
@@ -379,8 +377,8 @@ function UIPdaTeleport:OnKeyboard(dik, keyboard_action)
 		elseif dik == 337 then  -- DIK_LMOUSE
 			for i = 1, 4 do
 				self.move[i] = false
-				self.need_update = nil
 			end
+			self.need_update = nil
 		end
 	end
 

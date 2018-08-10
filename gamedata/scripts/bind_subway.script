@@ -1,0 +1,177 @@
+-- -*- mode: lua; encoding: windows-1251 -*-
+local binders = {}
+local active_zone = nil
+
+function init(obj)
+	obj:bind_object( subway_binder(obj) )
+end
+
+------------------------------------------------------------
+class "subway_binder" (object_binder)
+
+function subway_binder:__init(obj)
+	super(obj)
+
+	self.inside = false
+	self.activated = false
+	self.timer_active = false
+end
+
+function subway_binder:net_spawn(data)
+	if not object_binder.net_spawn(self, data) then
+		return false
+	end
+	binders[self.object:id()] = self
+	return true
+end
+
+function subway_binder:net_destroy()
+	binders[self.object:id()] = nil
+	object_binder.net_destroy(self)
+end
+
+function subway_binder:actor_update(delta)
+	if self.object:inside( db.actor:position() )
+		and db.actor:object("device_scaner")
+	then
+		if not self.inside then
+			self.inside = true
+			self:on_actor_inside()
+		end
+	else
+		if self.inside then
+			self.inside = false
+			self:on_actor_outside()
+		end
+	end
+
+	if self.timer_active then
+		self.time = self.time - delta
+		if self.time <= 0 then
+			self.activated = true
+			local se_obj = alife():object(self.object:id())
+			if se_obj then
+				se_obj.activated = true
+				teleport.add_zone(se_obj)
+			end
+			self:break_scan_timer()
+		else
+			self.timer:SetText( string.format("%02d:%02d", self.time/60000, self.time/1000) )
+			if self.time <= 5000 and self.txt_change == nil then
+				self.txt_change = true
+				self.timer_text:SetText("Сохранение...")
+			end
+		end
+end
+
+function subway_binder:on_actor_inside()
+	active_zone = self.object:id()
+
+	if self.timer_active then  -- after loading
+		self:start_scan_timer()
+		return
+	end
+
+	if self.activated then
+		sms('Вы вошли в зону "пространственного тоннеля", используйте прибор для перемещения.')
+	else
+		sms('Обнаружена новая аномалия. Используйте прибор для её сканирования и добавления в базу данных.")
+	end
+end
+
+function subway_binder:on_actor_outside()
+	active_zone = nil
+
+	local msg
+	if db.actor:object("device_scaner") then
+		msg = "Вы покинули зону аномалии. "
+	end
+	if self.timer_active then
+		msg = (msg or "").."Сканирование прервано."
+		self:break_scan_timer()
+	end
+	if msg then sms(msg) end
+end
+
+function subway_binder:start_scan_timer()
+	if self.time == nil then
+		self.time = math.random(12, 20) * 1000
+	end
+	self.timer_active = true
+
+	local hud = get_hud()
+	self.timer = hud:AddCustomStatic("hud_timer", true):wnd()
+	self.timer:SetText( string.format("%02d:%02d", self.time/60000, self.time/1000) )
+	self.timer_text = hud:AddCustomStatic("hud_timer_text", true):wnd()
+	if self.time <= 5000 then
+		self.txt_change = true
+		self.timer_text:SetText("Сохранение...")
+	else
+		self.timer_text:SetText("Сканирование...")
+	end
+end
+
+function subway_binder:break_scan_timer()
+	self.time = nil
+	self.timer_active = false
+	self.timer = nil
+	self.timer_text = nil
+	self.txt_change = nil
+
+	local hud = get_hud()
+	if hud:GetCustomStatic("hud_timer") then
+		hud:RemoveCustomStatic("hud_timer")
+	end
+	if hud:GetCustomStatic("hud_timer_text") then
+		hud:RemoveCustomStatic("hud_timer_text")
+	end
+end
+
+function subway_binder:save(packet)
+	object_binder.save(self, packet)
+
+	packet:w_bool(self.activated)
+	packet:w_bool(self.timer_active)
+	if self.timer_active then
+		packet:w_s32(self.time)
+	end
+end
+
+function subway_binder:load(reader)
+	object_binder.load(self, reader)
+
+	self.activated = reader:r_bool()
+	self.timer_active = reader:r_bool()
+	if self.timer_active then
+		self.time = reader:r_s32()
+	end
+end
+
+------------------------------------------------------------
+function actor_update(delta)
+	for id, binder in pairs(binders) do
+		binder:actor_update(delta)
+	end
+end
+
+function start_scan_timer(zone_id)
+	local binder = binders[zone_id]
+	if not binder.timer_active then
+		binder:start_scan_timer()
+	end
+end
+
+function get_active_zone()
+	if active_zone ~= nil then
+		return active_zone, binders[active_zone].activated
+	end
+	return nil, nil
+end
+
+function sms(text)
+	local snd = xr_sound.get_safe_sound_object([[device\pda\pda_news]])
+	snd:play_no_feedback(db.actor, sound_object.s2d, 0, vector(), 1.0)
+	local msg = "%c[255,160,200,200]Пространственный сканер\\n%c[default]"..text
+	db.actor:give_game_news(msg, "ui\\ui_iconsTotal", Frect():set(0,658,83,47), 0, 5000)
+	return true
+end

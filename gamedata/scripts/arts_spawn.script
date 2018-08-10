@@ -14,38 +14,42 @@ local anom_classes = {
 	[clsid.zone_mincer_s] = true,
 	[clsid.zone_mosquito_bald] = true
 }
-local sys_ini = system_ini()
 
 -- читаем, что спавнить и с какой вероятностью, из конфигов аномалий
-function spawn_artefact(obj)
-	if not anom_classes[obj:clsid()] then return false end
-	if math.random() > 0.4 then return false end
-	if alife():level_name(game_graph():vertex(obj.m_game_vertex_id):level_id()) ~= level.name() then
-		return false
-	end
-	
-	local sect = obj:section_name()
-	-- log("spawn_artefacts: %s", obj:name())
-	if sys_ini:r_float(sect, "BirthProbability")>math.random() then
-		local arts = sys_ini:r_string(sect, "artefacts")
-		local prob = {}
-		-- log("arts = %s", arts)
-		for a, n in string.gmatch(arts, "([%w_%-]+)%s*,%s*([%d%.]+)") do
-			prob[a] = tonumber(n)
-			-- log("prob: [%s] = %s", a, n)
-		end
-		for k,v in pairs(prob)do
-			if v > math.random() then
-				local sobj = alife():create(k, obj.position:add(vector():set(0,1,0)),
-						obj.m_level_vertex_id, obj.m_game_vertex_id)
-				-- level.map_add_object_spot_ser(sobj.id, "red_location", sobj:name())
-				-- log("spawn "..sobj:name())
-				this.del_ai_flag(sobj)
-				return true
+function spawn_artefacts()
+	local obj, sect
+	local sim, gg = alife(), game_graph()
+	loval lname = level.name()
+	local sys_ini = system_ini()
+	for i = 1, 65534 do
+		obj = sim:object(i)
+		if obj and anom_classes[obj:clsid()]
+			and math.random() > 0.4
+		then
+			if sim:level_name(gg:vertex(obj.m_game_vertex_id):level_id()) ~= lname then
+				sect = obj:section_name()
+				-- log("spawn_artefacts: %s", obj:name())
+				if sys_ini:r_float(sect, "BirthProbability")>math.random() then
+					local arts = sys_ini:r_string(sect, "artefacts")
+					local prob = {}
+					-- log("arts = %s", arts)
+					for a, n in string.gmatch(arts, "([%w_%-]+)%s*,%s*([%d%.]+)") do
+						prob[a] = tonumber(n)
+						-- log("prob: [%s] = %s", a, n)
+					end
+					for k,v in pairs(prob)do
+						if v > math.random() then
+							local sobj = alife():create(k, obj.position:add(vector():set(0,1,0)),
+									obj.m_level_vertex_id, obj.m_game_vertex_id)
+							-- level.map_add_object_spot_ser(sobj.id, "red_location", sobj:name())
+							-- log("spawn "..sobj:name())
+							this.del_ai_flag(sobj)
+						end
+					end
+				end
 			end
 		end
 	end
-	return false
 end
 
 -- чтобы арты под текстуры не проваливались
@@ -59,14 +63,7 @@ function del_ai_flag( obj )
 
 	local data = {}
 	-- cse_alife_object
-	data.game_vertex_id = pk:r_u16()
-	data.distance              = pk:r_float()
-	data.direct_control    = pk:r_s32()
-	data.level_vertex_id  = pk:r_s32()
-	data.object_flags       = pk:r_s32()
-	data.custom_data     = pk:r_stringZ()
-	data.story_id              = pk:r_s32()
-	data.spawn_story_id = pk:r_s32()
+	teleportator.read_cse_alife_object( data, pk )
 	-- cse_visual
 	data.visual_name  = pk:r_stringZ()
 	data.visual_flags   = pk:r_u8()
@@ -78,14 +75,7 @@ function del_ai_flag( obj )
 
 	pk:w_begin( 0 )
 	-- cse_alife_object
-	pk:w_u16     ( data.game_vertex_id )
-	pk:w_float   ( data.distance )
-	pk:w_s32     ( data.direct_control )
-	pk:w_s32     ( data.level_vertex_id )
-	pk:w_s32     ( data.object_flags )
-	pk:w_stringZ ( data.custom_data )
-	pk:w_s32     ( data.story_id)
-	pk:w_s32     ( data.spawn_story_id )
+	teleportator.write_cse_alife_object( data, pk )
 	-- cse_visual
 	pk:w_stringZ ( data.visual_name )
 	pk:w_u8        ( data.visual_flags )

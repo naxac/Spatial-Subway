@@ -168,7 +168,7 @@ local info2call = {
 }
 function actor_binder:info_callback(npc, info_id)
 	printf("*INFO*: npc='%s' id='%s'", npc:name(), info_id)
-	-- оптимизэйшн, блеать
+	-- оптимизация как бы...
 	if info2call[info_id] then
 		inventory.on_inventory_info(info_id)
 	else
@@ -296,6 +296,7 @@ function actor_binder:update(delta)
 	-- обновление рестрикторов, которые под логикой, срабатывает через интервалы времени
 	if self.next_restrictors_update_time < time then
 		bind_restrictor.actor_update(delta)
+		bind_subway.actor_update(time - self.next_restrictors_update_time)
 
 		self.next_restrictors_update_time = time + 200
 
