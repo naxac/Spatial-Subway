@@ -1,6 +1,7 @@
 -- -*- mode: lua; encoding: windows-1251 -*-
 local binders = {}
 local active_zone = nil
+local spawned_monsters = false
 
 function init(obj)
 	obj:bind_object( subway_binder(obj) )
@@ -52,8 +53,11 @@ function subway_binder:actor_update(delta)
 			local se_obj = alife():object(self.object:id())
 			if se_obj then
 				se_obj.activated = true
+				level.map_add_object_spot_ser(sobj.id, "crlc_small", "Пространственный тоннель")
+				sms("Аномалия успешно просканирована и сохранена в базе данных сканера.")
 				teleport.add_zone(se_obj)
 			end
+			spawned_monsters = false
 			self:break_scan_timer()
 		else
 			self.timer:SetText( string.format("%02d:%02d", self.time/60000, self.time/1000) )
@@ -158,6 +162,7 @@ function start_scan_timer(zone_id)
 	local binder = binders[zone_id]
 	if not binder.timer_active then
 		binder:start_scan_timer()
+		teleportator.start_small_timer(math.random(3, 10), this.spawn_monsters)
 	end
 end
 
@@ -174,4 +179,21 @@ function sms(text)
 	local msg = "%c[255,160,200,200]Пространственный сканер\\n%c[default]"..text
 	db.actor:give_game_news(msg, "ui\\ui_iconsTotal", Frect():set(0,658,83,47), 0, 5000)
 	return true
+end
+--------------------------------------------------------
+-- чтобы жизнь медом не казалась
+function spawn_monsters()
+	local monster_sections = { "dog_normal", "dog_strong", "boar_normal", "boar_strong", "flesh_normal", "flesh_strong", "bloodsucker_normal", "bloodsucker_strong", "snork_normal", "snork_strong", "m_controller_normal", "gigant_normal", "m_poltergeist_normal_tele", "m_poltergeist_normal_flame", "pseudodog_normal", "pseudodog_strong", "psy_dog", "m_tushkano_normal" }
+	local gv, lv = db.actor:game_vertex_id(), db.actor:level_vertex_id()
+	local pos = db.actor:position()
+	local dir = db.actor:direction()
+	local sim = alife()
+	local new_pos, new_dir
+	for i = 1, math.random(4, 7) do
+		new_dir = vector_rotate_y(dir, math.random(10, 350)
+		new_pos = pos:add( new_dir:mul(math.random(5, 8)) )
+		sim:create( monster_sections[math.random(#monster_sections)],
+			new_pos, lv, gv)
+	end
+	spawned_monsters = true
 end
