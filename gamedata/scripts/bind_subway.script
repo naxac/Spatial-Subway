@@ -1,25 +1,25 @@
 -- -*- mode: lua; encoding: windows-1251 -*-
 local binders = {}
 local active_zone = nil
-local spawned_monsters = false
 
 function init(obj)
 	obj:bind_object( subway_binder(obj) )
 end
 
 ------------------------------------------------------------
-class "subway_binder" (object_binder)
+class "subway_binder" ( object_binder )
 
-function subway_binder:__init(obj)
+function subway_binder:__init( obj )
 	super(obj)
 
 	self.inside = false
 	self.activated = false
 	self.timer_active = false
+	self.monster_spawned = 0
 end
 
-function subway_binder:net_spawn(data)
-	if not object_binder.net_spawn(self, data) then
+function subway_binder:net_spawn( data )
+	if not object_binder.net_spawn( self, data ) then
 		return false
 	end
 	binders[self.object:id()] = self
@@ -28,12 +28,12 @@ end
 
 function subway_binder:net_destroy()
 	binders[self.object:id()] = nil
-	object_binder.net_destroy(self)
+	object_binder.net_destroy( self )
 end
 
-function subway_binder:actor_update(delta)
+function subway_binder:actor_update( delta )
 	if self.object:inside( db.actor:position() )
-		and db.actor:object("device_scaner")
+		and inventory.on_belt( "device_scaner" )
 	then
 		if not self.inside then
 			self.inside = true
@@ -45,25 +45,27 @@ function subway_binder:actor_update(delta)
 			self:on_actor_outside()
 		end
 	end
+	if self.loading then self.loading = nil end
 
 	if self.timer_active then
 		self.time = self.time - delta
 		if self.time <= 0 then
 			self.activated = true
-			local se_obj = alife():object(self.object:id())
+			local se_obj = alife():object( self.object:id() )
 			if se_obj then
 				se_obj.activated = true
-				level.map_add_object_spot_ser(sobj.id, "crlc_small", "Пространственный тоннель")
-				sms("Аномалия успешно просканирована и сохранена в базе данных сканера.")
-				teleport.add_zone(se_obj)
+				level.map_add_object_spot_ser( sobj.id, "crlc_small", "Пространственный тоннель" )
+				sms( "Аномалия успешно просканирована и сохранена в базе данных сканера." )
+				teleport.add_zone( se_obj )
 			end
-			spawned_monsters = false
 			self:break_scan_timer()
 		else
-			self.timer:SetText( string.format("%02d:%02d", self.time/60000, self.time/1000) )
+			local sec = self.time/1000
+			self.timer:SetText( string.format("%02d:%02d", sec/60, sec%60) )
 			if self.time <= 5000 and self.txt_change == nil then
 				self.txt_change = true
-				self.timer_text:SetText("Сохранение...")
+				self.timer_text:SetText( "Сохранение..." )
+				teleportator.start_small_timer( math.random(4, 7), self.spawn_monsters, self, 2, 5, 2 )
 			end
 		end
 end
@@ -71,8 +73,11 @@ end
 function subway_binder:on_actor_inside()
 	active_zone = self.object:id()
 
-	if self.timer_active then  -- after loading
-		self:start_scan_timer()
+	if self.loading then
+		if self.timer_active then 
+			self:start_scan_timer()
+		end
+		self.loading = nil
 		return
 	end
 
@@ -87,31 +92,34 @@ function subway_binder:on_actor_outside()
 	active_zone = nil
 
 	local msg
-	if db.actor:object("device_scaner") then
+	if inventory.on_belt( "device_scaner" ) then
 		msg = "Вы покинули зону аномалии. "
 	end
 	if self.timer_active then
-		msg = (msg or "").."Сканирование прервано."
+		msg = ( msg or "" ).."Сканирование прервано."
 		self:break_scan_timer()
 	end
-	if msg then sms(msg) end
+	if msg then sms( msg ) end
 end
 
 function subway_binder:start_scan_timer()
 	if self.time == nil then
-		self.time = math.random(12, 20) * 1000
+		self.time = math.random(15, 25) * 1000
 	end
 	self.timer_active = true
 
 	local hud = get_hud()
 	self.timer = hud:AddCustomStatic("hud_timer", true):wnd()
-	self.timer:SetText( string.format("%02d:%02d", self.time/60000, self.time/1000) )
+	local sec = self.time/1000
+	self.timer:SetText( string.format("%02d:%02d", sec/60, sec%60) )
 	self.timer_text = hud:AddCustomStatic("hud_timer_text", true):wnd()
 	if self.time <= 5000 then
 		self.txt_change = true
-		self.timer_text:SetText("Сохранение...")
+		self.timer_text:SetText( "Сохранение..." )
+		teleportator.start_small_timer( math.random(4, 7), self.spawn_monsters, self, 2, 5, 2 )
 	else
-		self.timer_text:SetText("Сканирование...")
+		self.timer_text:SetText( "Сканирование..." )
+		teleportator.start_small_timer( math.random(3, 10), self.spawn_monsters, self, 4, 7, 1 )
 	end
 end
 
@@ -131,23 +139,52 @@ function subway_binder:break_scan_timer()
 	end
 end
 
-function subway_binder:save(packet)
-	object_binder.save(self, packet)
+function subway_binder:save( packet )
+	object_binder.save( self, packet )
 
-	packet:w_bool(self.activated)
-	packet:w_bool(self.timer_active)
+	packet:w_bool( self.activated )
+	if self.activated then return end
+
+	packet:w_bool( self.timer_active )
 	if self.timer_active then
-		packet:w_s32(self.time)
+		packet:w_s32( self.time )
 	end
+	packet:w_u8( self.monster_spawned )
 end
 
-function subway_binder:load(reader)
-	object_binder.load(self, reader)
+function subway_binder:load( reader )
+	self.loading = true
+	object_binder.load( self, reader )
 
 	self.activated = reader:r_bool()
+	if self.activated then return end
+
 	self.timer_active = reader:r_bool()
 	if self.timer_active then
 		self.time = reader:r_s32()
+	end
+	self.monster_spawned = reader:r_u8()
+end
+
+-- чтобы жизнь медом не казалась
+function subway_binder:spawn_monsters(cnt_min, cnt_max, flag)
+	if flag and bit_and( self.monster_spawned, flag ) == flag then return end
+
+	local monsters_sections = { "dog_normal", "dog_strong", "boar_normal", "boar_strong", "flesh_normal", "flesh_strong", "bloodsucker_normal", "bloodsucker_strong", "snork_normal", "snork_strong", "m_controller_normal", "gigant_normal", "m_poltergeist_normal_tele", "m_poltergeist_normal_flame", "pseudodog_normal", "pseudodog_strong", "psy_dog", "m_tushkano_normal" }
+	local gv, lv = db.actor:game_vertex_id(), db.actor:level_vertex_id()
+	local pos = db.actor:position()
+	local dir = db.actor:direction()
+	local sim = alife()
+	local new_pos, new_dir
+	for i = 1, math.random(cnt_min, cnt_max) do
+		new_dir = vector_rotate_y( dir, math.random(10, 350) )
+		new_pos = pos:add( new_dir:mul(math.random(5, 8)) )
+		sim:create( monsters_sections[ math.random(#monsters_sections) ],
+			new_pos, lv, gv)
+	end
+
+	if flag then
+		self.monster_spawned = bit_or( self.monster_spawned, flag )
 	end
 end
 
@@ -162,7 +199,6 @@ function start_scan_timer(zone_id)
 	local binder = binders[zone_id]
 	if not binder.timer_active then
 		binder:start_scan_timer()
-		teleportator.start_small_timer(math.random(3, 10), this.spawn_monsters)
 	end
 end
 
@@ -179,21 +215,4 @@ function sms(text)
 	local msg = "%c[255,160,200,200]Пространственный сканер\\n%c[default]"..text
 	db.actor:give_game_news(msg, "ui\\ui_iconsTotal", Frect():set(0,658,83,47), 0, 5000)
 	return true
-end
---------------------------------------------------------
--- чтобы жизнь медом не казалась
-function spawn_monsters()
-	local monster_sections = { "dog_normal", "dog_strong", "boar_normal", "boar_strong", "flesh_normal", "flesh_strong", "bloodsucker_normal", "bloodsucker_strong", "snork_normal", "snork_strong", "m_controller_normal", "gigant_normal", "m_poltergeist_normal_tele", "m_poltergeist_normal_flame", "pseudodog_normal", "pseudodog_strong", "psy_dog", "m_tushkano_normal" }
-	local gv, lv = db.actor:game_vertex_id(), db.actor:level_vertex_id()
-	local pos = db.actor:position()
-	local dir = db.actor:direction()
-	local sim = alife()
-	local new_pos, new_dir
-	for i = 1, math.random(4, 7) do
-		new_dir = vector_rotate_y(dir, math.random(10, 350)
-		new_pos = pos:add( new_dir:mul(math.random(5, 8)) )
-		sim:create( monster_sections[math.random(#monster_sections)],
-			new_pos, lv, gv)
-	end
-	spawned_monsters = true
 end
