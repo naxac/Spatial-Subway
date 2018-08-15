@@ -17,16 +17,16 @@ local anom_classes = {
 
 -- читаем, что спавнить и с какой вероятностью, из конфигов аномалий
 function spawn_artefacts()
-	local obj, sect
+	local obj, sect, f
 	local sim, gg = alife(), game_graph()
-	loval lname = level.name()
+	local lname = level.name()
 	local sys_ini = system_ini()
 	for i = 1, 65534 do
 		obj = sim:object(i)
-		if obj and anom_classes[obj:clsid()]
-			and math.random() > 0.4
-		then
-			if sim:level_name(gg:vertex(obj.m_game_vertex_id):level_id()) ~= lname then
+		if obj and anom_classes[obj:clsid()] then
+			if sim:level_name(gg:vertex(obj.m_game_vertex_id):level_id()) == lname
+				and math.random() > 0.82
+			then
 				sect = obj:section_name()
 				-- log("spawn_artefacts: %s", obj:name())
 				if sys_ini:r_float(sect, "BirthProbability")>math.random() then
@@ -44,8 +44,11 @@ function spawn_artefacts()
 							-- level.map_add_object_spot_ser(sobj.id, "red_location", sobj:name())
 							-- log("spawn "..sobj:name())
 							this.del_ai_flag(sobj)
+							f = true
+							break
 						end
 					end
+					if f then break end
 				end
 			end
 		end
