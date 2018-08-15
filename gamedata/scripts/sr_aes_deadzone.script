@@ -116,7 +116,7 @@ function action_postprocess:update (delta)
 	if xr_logic.try_switch_to_another_section (self.object, self.st, db.actor) or self.shift then
 		return
 	end
-	if if self.shift then return end
+	if self.shift then return end
 	self.actor_inside = self.object:inside (db.actor:position ())
 	
 	--if self.actor_inside == true then

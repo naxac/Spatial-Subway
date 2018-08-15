@@ -11,19 +11,21 @@ end
 
 -- ѕри добавлении локации в таблицу об€зательно добавить инфопоршен: <им€_локации>_teleport
 levels = {
-l01_escape = {},
-l02_garbage = {},
-l03_agroprom = {},
-l04_darkvalley = {},
-l05_bar = {},
-l06_rostok = {},
-l07_military = {},
-l08_yantar = {},
-l10_radar = {},
-l11_pripyat = {},
-l12_stancia = {},
-l12_stancia_2 = {}
+l01_escape = false,
+l02_garbage = false,
+l03_agroprom = false,
+l04_darkvalley = false,
+l05_bar = false,
+l06_rostok = false,
+l07_military = false,
+l08_yantar = false,
+l10_radar = false,
+l11_pripyat = false,
+l12_stancia = false,
+l12_stancia_2 = false
 }
+local max_cnt = 10
+local min_cnt = 6
 
 local tmp_pos, vertexes
 
@@ -58,13 +60,13 @@ function on_net_spawn()
 		sim:release(se_obj, true)
 	end
 	
-	if levels[lname] and not has_alife_info(lname.."_teleport") then
+	if levels[lname] ~= nil and not has_alife_info(lname.."_teleport") then
 		db.actor:give_info_portion(lname.."_teleport")
 		
 		getVertexes(lname)
 		tmp_pos = {}
 		
-		local cnt = math.random(6,10)
+		local cnt = math.random( min_cnt, max_cnt )
 		while cnt > 0 do
 			if spawn_teleport() then cnt = cnt - 1 end
 		end
@@ -72,7 +74,7 @@ function on_net_spawn()
 		if not has_alife_info("first_run_teleport") then
 			local a = db.actor
 			a:give_info_portion("first_run_teleport")
-			sim:create("device_teleport",
+			sim:create("device_scaner",
 						a:position(),
 						a:level_vertex_id(),
 						a:game_vertex_id(),
@@ -89,12 +91,15 @@ end
 function add_zone(se_obj)
 	local gv = se_obj.m_game_vertex_id
 	local ln = alife():level_name(game_graph():vertex(gv):level_id())
-	if levels[ln] and levels[ln][se_obj.id] == nil then
-		levels[ln][se_obj.id] = {
-			pos = se_obj.position,
-			lv    = se_obj.m_level_vertex_id,
-			gv   = gv
-		}
+	if levels[ln] ~= nil then
+		if not levels[ln] then levels[ln] = {} end
+		if levels[ln][se_obj.id] == nil then
+			levels[ln][se_obj.id] = {
+				pos = se_obj.position,
+				lv    = se_obj.m_level_vertex_id,
+				gv   = gv
+			}
+		end
 	end
 end
 
@@ -121,7 +126,7 @@ function spawn_teleport()
 		table.insert(tmp_pos, pos)
 		local sobj = alife():create("zone_subway", pos, new_lv, new_gv)
 		-- level.map_add_object_spot_ser(sobj.id, 'blue_location', sobj:name())
-		this.rewrite_zone_subway(se_obj, "", 2.5)
+		this.rewrite_zone_subway(sobj, 2.5)
 		return true
 	end
 	return false
@@ -132,7 +137,6 @@ function check_item(obj)
 		if level.main_input_receiver() then
 			level.start_stop_menu(level.main_input_receiver(), true)
 		end
-		alife():create("device_scaner", db.actor:position(), db.actor:level_vertex_id(), db.actor:game_vertex_id(), db.actor:id())
 
 		local zone_id, activated = bind_subway.get_active_zone()
 		if activated == nil then
@@ -144,7 +148,7 @@ function check_item(obj)
 					level.start_stop_menu(ui_teleportator.UIPdaTeleport(true), true)
 				end
 			)
-		else
+		elseif activated == false then
 			bind_subway.start_scan_timer(zone_id)
 		end
 	end
@@ -296,7 +300,7 @@ function rewrite_zone_subway(se_obj, radius)
 	-- cse_alife_space_restrictor
 	data.restrictor_type	= pk:r_u8()
 	-- se_restrictor
-	data.activated = pk:r_bool()
+	data.activated = pk:r_u8()
 
 	data.shapes = {
 		[1] = {
@@ -312,7 +316,7 @@ function rewrite_zone_subway(se_obj, radius)
 	-- cse_alife_space_restrictor
 	pk:w_u8( data.restrictor_type )
 	-- se_restrictor
-	pk:w_bool( data.activated )
+	pk:w_u8( data.activated )
 	pk:r_seek(2)
 	se_obj:STATE_Read( pk, pk:w_tell() )
 end
@@ -332,7 +336,7 @@ function create_level_changer( pos, lv, gv, lname )
 	-- cse_alife_space_restrictor
 	data.restrictor_type = pk:r_u8()
 	-- cse_alife_level_changer
-	datat.dest_game_vertex_id  = pk:r_u16()
+	data.dest_game_vertex_id  = pk:r_u16()
 	data.dest_level_vertex_id = pk:r_s32()
 	data.dest_position        = pk:r_vec3()
 	data.dest_direction       = pk:r_vec3()
@@ -353,7 +357,7 @@ function create_level_changer( pos, lv, gv, lname )
 		}
 	}
 	data.restrictor_type = 3  -- RestrictorTypeNone
-	datat.dest_game_vertex_id = gv
+	data.dest_game_vertex_id = gv
 	data.dest_level_vertex_id = lv
 	data.dest_position = pos
 	data.dest_level_name = lname

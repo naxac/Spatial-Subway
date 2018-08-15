@@ -1,3 +1,4 @@
+-- -*- mode: lua; encoding: windows-1251 -*-
 local not_spawn_levels = {
 	l05_bar = true
 }
@@ -135,7 +136,6 @@ function se_zone_visual:STATE_Read( packet, size )
 end
 
 
-
 --' Рестрикторы
 class "se_restrictor" (cse_alife_space_restrictor)
 function se_restrictor:__init (section) super (section)
@@ -147,7 +147,7 @@ end
 function se_restrictor:STATE_Write (packet)
 	cse_alife_space_restrictor.STATE_Write (self, packet)
 	if self:section_name() == "zone_subway" then
-		packet:w_bool(self.activated)
+		packet:w_bool( self.activated )
 	end
 end
 function se_restrictor:STATE_Read (packet, size)

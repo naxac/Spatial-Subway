@@ -158,18 +158,9 @@ function actor_binder:level_border_exit(npc, info_id)
 	self.actor_detector:actor_exit()
 end
 ----------------------------------------------------------------------------------------------------------------------
-local info2call = {
-	ui_inventory             = "on_inventory_open",
-	ui_inventory_hide        = "on_inventory_hide",
-	ui_car_body              = "on_body_open",
-	ui_car_body_hide         = "on_body_hide",
-	ui_pda                   = "on_pda_open",
-	ui_pda_hide              = "on_pda_hide"
-}
 function actor_binder:info_callback(npc, info_id)
 	printf("*INFO*: npc='%s' id='%s'", npc:name(), info_id)
-	-- оптимизаци€ как бы...
-	if info2call[info_id] then
+	if string.find( info_id, "^ui_" ) then
 		inventory.on_inventory_info(info_id)
 	else
 		--' —южет
@@ -296,7 +287,7 @@ function actor_binder:update(delta)
 	-- обновление рестрикторов, которые под логикой, срабатывает через интервалы времени
 	if self.next_restrictors_update_time < time then
 		bind_restrictor.actor_update(delta)
-		bind_subway.actor_update(time - self.next_restrictors_update_time)
+		bind_subway.actor_update()
 
 		self.next_restrictors_update_time = time + 200
 

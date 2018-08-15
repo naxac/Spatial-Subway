@@ -85,17 +85,17 @@ function UIPdaTeleport:__init(in_zone) super()
 	-- рамка-ПДА
 	xml:InitStatic("pda", self)
 	self.map_name = xml:InitStatic("map_name", self)
-	
+
 	-- Кнопки навигации
 	xml:InitStatic("st_center", self)
 	self:Register(xml:InitButton("btn_left",self), "btn_left")
-	self:AddCallback("btn_left", ui_events.BUTTON_DOWN, function(wnd) wnd.move[1] = true end, self)
+	self:AddCallback("btn_left", ui_events.BUTTON_DOWN, this.onButtonMoveClicked, { wnd = self, index = 1 })
 	self:Register(xml:InitButton("btn_right",self), "btn_right")
-	self:AddCallback("btn_right", ui_events.BUTTON_DOWN, function(wnd) wnd.move[2] = true end, self)
+	self:AddCallback("btn_right", ui_events.BUTTON_DOWN, this.onButtonMoveClicked, { wnd = self, index = 2 })
 	self:Register(xml:InitButton("btn_up",self), "btn_up")
-	self:AddCallback("btn_up", ui_events.BUTTON_DOWN, function(wnd) wnd.move[3] = true end, self)
+	self:AddCallback("btn_up", ui_events.BUTTON_DOWN, this.onButtonMoveClicked, { wnd = self, index = 3 })
 	self:Register(xml:InitButton("btn_down",self), "btn_down")
-	self:AddCallback("btn_down", ui_events.BUTTON_DOWN, function(wnd) wnd.move[4] = true end, self)
+	self:AddCallback("btn_down", ui_events.BUTTON_DOWN, this.onButtonMoveClicked, { wnd = self, index = 4 })
 	-- Зум
 	self:Register(xml:InitButton("btn_zoom_plus",self), "zoom_plus")
 	self:AddCallback("zoom_plus", ui_events.BUTTON_DOWN, self.ZoomAdd, self)
@@ -201,6 +201,11 @@ function UIPdaTeleport:DrawMap()
 	end
 end
 
+-- callbacks
+function onButtonMoveClicked( t )
+	t.wnd.move[t.index] = true
+	t.wnd.need_update = true
+end
 function onMapFocus( t )
 	t.wnd.map_name:SetTextST(t.map)
 	t.wnd.map_in_focus = t.map
@@ -214,9 +219,9 @@ function onAnomalyClicked( t )
 	t.wnd:on_quit()
 	if teleportator.remove_art() then
 		level.add_pp_effector ("teleport.ppe", 2006, false)
-		local snd_obj = xr_sound.get_safe_sound_object("anomaly\\teleport_work_1")
+		local snd_obj = sound_object("anomaly\\teleport_work_1")
 		snd_obj:play_no_feedback(db.actor, sound_object.s2d, 0, vector(), 1.0)
-		teleportator.start_small_timer(0.5, teleportator.go_to, t.lvl, t.id)
+		teleportator.start_small_timer(0.7, teleportator.go_to, t.lvl, t.id)
 	end
 end
 
@@ -374,7 +379,7 @@ function UIPdaTeleport:OnKeyboard(dik, keyboard_action)
 				if v then return true end
 			end
 			self.need_update = nil
-		elseif dik == 337 then  -- DIK_LMOUSE
+		elseif dik == 337 and self.need_update then  -- DIK_LMOUSE
 			for i = 1, 4 do
 				self.move[i] = false
 			end
@@ -388,4 +393,3 @@ end
 function UIPdaTeleport:on_quit()
 	self:GetHolder():start_stop_menu(self, true)
 end
-
