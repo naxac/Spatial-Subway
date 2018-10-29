@@ -33,18 +33,18 @@ math.clamp = function( n, min, max )
 	return (n>max and max) or (n<min and min) or n
 end
 -----------------------------------------
--- Íàñòðîéêè óïðàâëåíèÿ
-local move_shift = 5	-- êîë-âî ïèêñåëåé, íà êîòîðîå ïåðåìåùàåòñÿ êàðòà çà àïäåéò
-local move_delta = 3   -- ñêîëüêî ïèêñåëåé ïðèáàâëÿåì/îòíèìàåì îò move_shift ïðè íàæàòèè Shift/Ctrl
-local min_zoom = nil	-- ìèíèìàëüíûé ìàñøòàá
-local max_zoom = 5		-- ìàêñèìàëüíûé ìàñøòàá
-local zoom_shift = 0.4	-- óâåëè÷åíèå/óìåíüøåíèå ìàñøòàáà çà îäèí êëèê
-local spot_size = 12        -- ðàçìåð ìåòîê íà àíîìàëèÿõ, ïèêñåëè
+-- ÃÃ Ã±Ã²Ã°Ã®Ã©ÃªÃ¨ Ã³Ã¯Ã°Ã Ã¢Ã«Ã¥Ã­Ã¨Ã¿
+local move_shift = 5	-- ÃªÃ®Ã«-Ã¢Ã® Ã¯Ã¨ÃªÃ±Ã¥Ã«Ã¥Ã©, Ã­Ã  ÃªÃ®Ã²Ã®Ã°Ã®Ã¥ Ã¯Ã¥Ã°Ã¥Ã¬Ã¥Ã¹Ã Ã¥Ã²Ã±Ã¿ ÃªÃ Ã°Ã²Ã  Ã§Ã  Ã Ã¯Ã¤Ã¥Ã©Ã²
+local move_delta = 3   -- Ã±ÃªÃ®Ã«Ã¼ÃªÃ® Ã¯Ã¨ÃªÃ±Ã¥Ã«Ã¥Ã© Ã¯Ã°Ã¨Ã¡Ã Ã¢Ã«Ã¿Ã¥Ã¬/Ã®Ã²Ã­Ã¨Ã¬Ã Ã¥Ã¬ Ã®Ã² move_shift Ã¯Ã°Ã¨ Ã­Ã Ã¦Ã Ã²Ã¨Ã¨ Shift/Ctrl
+local min_zoom = nil	-- Ã¬Ã¨Ã­Ã¨Ã¬Ã Ã«Ã¼Ã­Ã»Ã© Ã¬Ã Ã±Ã¸Ã²Ã Ã¡
+local max_zoom = 5		-- Ã¬Ã ÃªÃ±Ã¨Ã¬Ã Ã«Ã¼Ã­Ã»Ã© Ã¬Ã Ã±Ã¸Ã²Ã Ã¡
+local zoom_shift = 0.4	-- Ã³Ã¢Ã¥Ã«Ã¨Ã·Ã¥Ã­Ã¨Ã¥/Ã³Ã¬Ã¥Ã­Ã¼Ã¸Ã¥Ã­Ã¨Ã¥ Ã¬Ã Ã±Ã¸Ã²Ã Ã¡Ã  Ã§Ã  Ã®Ã¤Ã¨Ã­ ÃªÃ«Ã¨Ãª
+local spot_size = 12        -- Ã°Ã Ã§Ã¬Ã¥Ã° Ã¬Ã¥Ã²Ã®Ãª Ã­Ã  Ã Ã­Ã®Ã¬Ã Ã«Ã¨Ã¿Ãµ, Ã¯Ã¨ÃªÃ±Ã¥Ã«Ã¨
 
-local map_st = {x=0, y=0}   -- òåêóùåå ïîëîæåíèå êàðòû
-local scale = 1                     -- òåêóùèé ìàñøòàá
+local map_st = {x=0, y=0}   -- Ã²Ã¥ÃªÃ³Ã¹Ã¥Ã¥ Ã¯Ã®Ã«Ã®Ã¦Ã¥Ã­Ã¨Ã¥ ÃªÃ Ã°Ã²Ã»
+local scale = 1                     -- Ã²Ã¥ÃªÃ³Ã¹Ã¨Ã© Ã¬Ã Ã±Ã¸Ã²Ã Ã¡
 local iniCache = {}
-local kStretch = ( 1024/768 ) / ( device().width/device().height )  -- êîýôôèöèåíò äëÿ ïîäñòðîéêè ïîä ðàçðåøåíèå ýêðàíà
+local kStretch = ( 1024/768 ) / ( device().width/device().height )  -- ÃªÃ®Ã½Ã´Ã´Ã¨Ã¶Ã¨Ã¥Ã­Ã² Ã¤Ã«Ã¿ Ã¯Ã®Ã¤Ã±Ã²Ã°Ã®Ã©ÃªÃ¨ Ã¯Ã®Ã¤ Ã°Ã Ã§Ã°Ã¥Ã¸Ã¥Ã­Ã¨Ã¥ Ã½ÃªÃ°Ã Ã­Ã 
 
 
 class "UIPdaTeleport" (CUIScriptWnd)
@@ -79,14 +79,14 @@ function UIPdaTeleport:__init(in_zone) super()
 		self.can_jump = true
 	end
 	
-	-- ðèñóåì êàðòó
+	-- Ã°Ã¨Ã±Ã³Ã¥Ã¬ ÃªÃ Ã°Ã²Ã³
 	self:DrawMap()
 	
-	-- ðàìêà-ÏÄÀ
+	-- Ã°Ã Ã¬ÃªÃ -ÃÃ„Ã€
 	xml:InitStatic("pda", self)
 	self.map_name = xml:InitStatic("map_name", self)
 
-	-- Êíîïêè íàâèãàöèè
+	-- ÃŠÃ­Ã®Ã¯ÃªÃ¨ Ã­Ã Ã¢Ã¨Ã£Ã Ã¶Ã¨Ã¨
 	xml:InitStatic("st_center", self)
 	self:Register(xml:InitButton("btn_left",self), "btn_left")
 	self:AddCallback("btn_left", ui_events.BUTTON_DOWN, this.onButtonMoveClicked, { wnd = self, index = 1 })
@@ -96,14 +96,14 @@ function UIPdaTeleport:__init(in_zone) super()
 	self:AddCallback("btn_up", ui_events.BUTTON_DOWN, this.onButtonMoveClicked, { wnd = self, index = 3 })
 	self:Register(xml:InitButton("btn_down",self), "btn_down")
 	self:AddCallback("btn_down", ui_events.BUTTON_DOWN, this.onButtonMoveClicked, { wnd = self, index = 4 })
-	-- Çóì
+	-- Ã‡Ã³Ã¬
 	self:Register(xml:InitButton("btn_zoom_plus",self), "zoom_plus")
 	self:AddCallback("zoom_plus", ui_events.BUTTON_DOWN, self.ZoomAdd, self)
 	self:Register(xml:InitButton("btn_zoom_minus",self), "zoom_minus")
 	self:AddCallback("zoom_minus", ui_events.BUTTON_DOWN, self.ZoomSub, self)
 	self:Register(xml:InitButton("btn_zoom_default",self), "zoom_default")
 	self:AddCallback("zoom_default", ui_events.BUTTON_DOWN, self.ZoomDefault, self)
-	-- Êíîïêà âûõîäà
+	-- ÃŠÃ­Ã®Ã¯ÃªÃ  Ã¢Ã»ÃµÃ®Ã¤Ã 
 	self:Register(xml:Init3tButton("btn_quit",self), "btn_quit")
 	self:AddCallback("btn_quit", ui_events.BUTTON_CLICKED, self.on_quit, self)
 end
@@ -131,7 +131,7 @@ end
 
 function UIPdaTeleport:DrawMap()
 	local texture, rect
-	-- Ãëîáàëüíàÿ êàðòà
+	-- ÃƒÃ«Ã®Ã¡Ã Ã«Ã¼Ã­Ã Ã¿ ÃªÃ Ã°Ã²Ã 
 	rect = self:GetFrect("global_map", "bound_rect")
 	texture = self.ini:r_string("global_map", "texture")
 	
@@ -156,14 +156,14 @@ function UIPdaTeleport:DrawMap()
 	
 	gMap:SetWndPos(map_st.x, map_st.y)
 	
-	-- ×èòàåì èç ini èìåíà óðîâíåé
+	-- Ã—Ã¨Ã²Ã Ã¥Ã¬ Ã¨Ã§ ini Ã¨Ã¬Ã¥Ã­Ã  Ã³Ã°Ã®Ã¢Ã­Ã¥Ã©
 	local res, map, v
 	local tmp = {}
 	for i = 0, self.ini:line_count("level_maps_single")-1 do
 		res, map, v = self.ini:r_line("level_maps_single",i,"","")
 		self.level_maps[string.lower(map)] = true
 	end
-	-- Ðèñóåì êàðòû  óðîâíåé è ìåñòà ïîëîæåíèÿ àíîìàëèé
+	-- ÃÃ¨Ã±Ã³Ã¥Ã¬ ÃªÃ Ã°Ã²Ã»  Ã³Ã°Ã®Ã¢Ã­Ã¥Ã© Ã¨ Ã¬Ã¥Ã±Ã²Ã  Ã¯Ã®Ã«Ã®Ã¦Ã¥Ã­Ã¨Ã¿ Ã Ã­Ã®Ã¬Ã Ã«Ã¨Ã©
 	local actor_pos = db.actor:position()
 	local level_name = level.name()
 	local show_anom = scale>1.5
@@ -251,7 +251,7 @@ function UIPdaTeleport:ResizeMap()
 		if v and #v>0 then
 			rect = self:GetFrect(lvl, "bound_rect")
 			self.zoom = st:GetWidth()/rect:width()
-			for i,t in ipairs(v) do
+			for i,t in pairs(v) do
 				pos = self:ConvertPosToPixel(t.pos, rect)
 				local b = self.anoms["btn_"..lvl..i]
 				b:SetWndPos(pos.x, pos.y)
