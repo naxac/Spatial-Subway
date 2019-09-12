@@ -18,7 +18,7 @@ function update(time)
 	belt_status = false
 
 	local actor = db.actor
-	-- Г‘ГЇГ ГўГ­ГЁГ¬ Г°Г Г§Г¤ГҐГ«ГїГѕГ№ГЁГ© ГҐГ«ГҐГ¬ГҐГ­ГІ
+	-- Спавним разделяющий елемент
 	if (separator_spawned == nil) then
 		local se_obj = alife():create(separator,
 			actor:position(),
@@ -33,7 +33,7 @@ function update(time)
 	belt_id = {}
 	flag = false
 
-	-- Г‘ГЄГ Г­ГЁГ°ГіГҐГ¬ ГЁГ­ГўГҐГ­ГІГ Г°Гј
+	-- Сканируем инвентарь
 	actor:inventory_for_each(scan_inv)
 	
 	need_update = false
@@ -41,7 +41,7 @@ function update(time)
 	belt_status = true
 end
 
--- Г“Г¤Г Г«ГїГҐГ¬ Г°Г Г§Г¤ГҐГ«ГїГѕГ№ГЁГ© ГҐГ«ГҐГ¬ГҐГ­ГІ
+-- Удаляем разделяющий елемент
 function del_separator()
 	if separator_spawned then
 		local se_obj = alife():object(separator_spawned)
@@ -50,7 +50,7 @@ function del_separator()
 	separator_spawned = nil
 end
 
--- ГЏГҐГ°ГҐГЎГ®Г° ГЇГ°ГҐГ¤Г¬ГҐГІГ®Гў ГЁГ­ГўГҐГ­ГІГ Г°Гї
+-- Перебор предметов инвентаря
 function scan_inv(item)
 	local section = item:section()
 
@@ -69,7 +69,7 @@ function scan_inv(item)
 	end
 end
 
--- ГЋГЇГ°ГҐГ¤ГҐГ«ГҐГ­ГЁГҐ Г­Г Г«ГҐГ·ГЁГї ГЇГ°ГҐГ¤Г¬ГҐГІГ  Гў Г®Г¤Г­Г®Г¬ ГЁГ§ Г±Г«Г®ГІГ®Гў
+-- Определение налечия предмета в одном из слотов
 function slot_item(item)
 	local obj
 	for i = 0, 12 do
@@ -82,7 +82,7 @@ function slot_item(item)
 	return nil
 end
 
--- ГЏГ®Г¤Г­ГїГІГЁГҐ ГЇГ°ГҐГ¤Г¬ГҐГІГ 
+-- Поднятие предмета
 function on_item_take(item)
 	if item:section() == separator then return end
 
@@ -92,7 +92,7 @@ function on_item_take(item)
 	end
 end
 
--- Г‚Г»ГЎГ°Г®Г± ГЇГ°ГҐГ¤Г¬ГҐГІГ 
+-- Выброс предмета
 function on_item_drop(item)
 	if item:section() == separator then return end
 
@@ -102,7 +102,7 @@ function on_item_drop(item)
 	end
 end
 
--- ГЋГІГЄГ°Г»ГІГЁГҐ/Г§Г ГЄГ°Г»ГІГЁГҐ ГЁГ­ГўГҐГ­ГІГ Г°Гї
+-- Открытие/закрытие инвентаря
 local inventory_info = {
 	ui_inventory = true, ui_inventory_hide = false,
 	ui_car_body = true,   ui_car_body_hide = false,
@@ -119,17 +119,17 @@ function on_inventory_info(info_id)
 end
 
 ----------------------------------------------------------------
--- ГЇГ°ГҐГ¤Г¬ГҐГІ Г­Г  ГЇГ®ГїГ±ГҐ (ГЇГ°Г®ГўГҐГ°ГЄГ  ГЇГ® Г±ГҐГЄГ¶ГЁГЁ)
+-- предмет на поясе (проверка по секции)
 function on_belt(sect)
 	return belt[sect]
 end
 
--- ГЇГ°ГҐГ¤Г¬ГҐГІ Г­Г  ГЇГ®ГїГ±ГҐ (ГЇГ°Г®ГўГҐГ°ГЄГ  ГЇГ® game_object)
+-- предмет на поясе (проверка по game_object)
 function item_on_belt(item)
 	return belt_id[item:id()]~=nil
 end
 
--- Г®ГЎГ№ГҐГҐ ГЄГ®Г«-ГўГ® ГЇГ°ГҐГ¤Г¬ГҐГІГ®Гў Г­Г  ГЇГ®ГїГ±ГҐ
+-- общее кол-во предметов на поясе
 function belt_count()
 	local n = 0
 	for _ in pairs(belt_id) do
@@ -138,7 +138,7 @@ function belt_count()
 	return n
 end
 
--- ГЇГ°Г®ГўГҐГ°ГЄГ  Г­Г Г«ГЁГ·ГЁГї Г Г°ГІГҐГґГ ГЄГІГ®Гў Г­Г  ГЇГ®ГїГ±ГҐ
+-- проверка наличия артефактов на поясе
 function has_arts_on_belt()
 	local art_clsids = {[clsid.artefact_s] = true, [clsid.artefact] = true}
 	local sys_ini = system_ini()
