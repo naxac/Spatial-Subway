@@ -33,18 +33,18 @@ math.clamp = function( n, min, max )
 	return (n>max and max) or (n<min and min) or n
 end
 -----------------------------------------
--- Íàñòðîéêè óïðàâëåíèÿ
-local move_shift = 5	-- êîë-âî ïèêñåëåé, íà êîòîðîå ïåðåìåùàåòñÿ êàðòà çà àïäåéò
-local move_delta = 3   -- ñêîëüêî ïèêñåëåé ïðèáàâëÿåì/îòíèìàåì îò move_shift ïðè íàæàòèè Shift/Ctrl
-local min_zoom = nil	-- ìèíèìàëüíûé ìàñøòàá
-local max_zoom = 5		-- ìàêñèìàëüíûé ìàñøòàá
-local zoom_shift = 0.4	-- óâåëè÷åíèå/óìåíüøåíèå ìàñøòàáà çà îäèí êëèê
-local spot_size = 12        -- ðàçìåð ìåòîê íà àíîìàëèÿõ, ïèêñåëè
+-- ГЌГ Г±ГІГ°Г®Г©ГЄГЁ ГіГЇГ°Г ГўГ«ГҐГ­ГЁГї
+local move_shift = 5	-- ГЄГ®Г«-ГўГ® ГЇГЁГЄГ±ГҐГ«ГҐГ©, Г­Г  ГЄГ®ГІГ®Г°Г®ГҐ ГЇГҐГ°ГҐГ¬ГҐГ№Г ГҐГІГ±Гї ГЄГ Г°ГІГ  Г§Г  Г ГЇГ¤ГҐГ©ГІ
+local move_delta = 3   -- Г±ГЄГ®Г«ГјГЄГ® ГЇГЁГЄГ±ГҐГ«ГҐГ© ГЇГ°ГЁГЎГ ГўГ«ГїГҐГ¬/Г®ГІГ­ГЁГ¬Г ГҐГ¬ Г®ГІ move_shift ГЇГ°ГЁ Г­Г Г¦Г ГІГЁГЁ Shift/Ctrl
+local min_zoom = nil	-- Г¬ГЁГ­ГЁГ¬Г Г«ГјГ­Г»Г© Г¬Г Г±ГёГІГ ГЎ
+local max_zoom = 5		-- Г¬Г ГЄГ±ГЁГ¬Г Г«ГјГ­Г»Г© Г¬Г Г±ГёГІГ ГЎ
+local zoom_shift = 0.4	-- ГіГўГҐГ«ГЁГ·ГҐГ­ГЁГҐ/ГіГ¬ГҐГ­ГјГёГҐГ­ГЁГҐ Г¬Г Г±ГёГІГ ГЎГ  Г§Г  Г®Г¤ГЁГ­ ГЄГ«ГЁГЄ
+local spot_size = 12        -- Г°Г Г§Г¬ГҐГ° Г¬ГҐГІГ®ГЄ Г­Г  Г Г­Г®Г¬Г Г«ГЁГїГµ, ГЇГЁГЄГ±ГҐГ«ГЁ
 
-local map_st = {x=0, y=0}   -- òåêóùåå ïîëîæåíèå êàðòû
-local scale = 1                     -- òåêóùèé ìàñøòàá
+local map_st = {x=0, y=0}   -- ГІГҐГЄГіГ№ГҐГҐ ГЇГ®Г«Г®Г¦ГҐГ­ГЁГҐ ГЄГ Г°ГІГ»
+local scale = 1                     -- ГІГҐГЄГіГ№ГЁГ© Г¬Г Г±ГёГІГ ГЎ
 local iniCache = {}
-local kStretch = ( 1024/768 ) / ( device().width/device().height )  -- êîýôôèöèåíò äëÿ ïîäñòðîéêè ïîä ðàçðåøåíèå ýêðàíà
+local kStretch = ( 1024/768 ) / ( device().width/device().height )  -- ГЄГ®ГЅГґГґГЁГ¶ГЁГҐГ­ГІ Г¤Г«Гї ГЇГ®Г¤Г±ГІГ°Г®Г©ГЄГЁ ГЇГ®Г¤ Г°Г Г§Г°ГҐГёГҐГ­ГЁГҐ ГЅГЄГ°Г Г­Г 
 
 
 class "UIPdaTeleport" (CUIScriptWnd)
@@ -79,14 +79,14 @@ function UIPdaTeleport:__init(in_zone) super()
 		self.can_jump = true
 	end
 	
-	-- ðèñóåì êàðòó
+	-- Г°ГЁГ±ГіГҐГ¬ ГЄГ Г°ГІГі
 	self:DrawMap()
 	
-	-- ðàìêà-ÏÄÀ
+	-- Г°Г Г¬ГЄГ -ГЏГ„ГЂ
 	xml:InitStatic("pda", self)
 	self.map_name = xml:InitStatic("map_name", self)
 
-	-- Êíîïêè íàâèãàöèè
+	-- ГЉГ­Г®ГЇГЄГЁ Г­Г ГўГЁГЈГ Г¶ГЁГЁ
 	xml:InitStatic("st_center", self)
 	self:Register(xml:InitButton("btn_left",self), "btn_left")
 	self:AddCallback("btn_left", ui_events.BUTTON_DOWN, this.onButtonMoveClicked, { wnd = self, index = 1 })
@@ -96,14 +96,14 @@ function UIPdaTeleport:__init(in_zone) super()
 	self:AddCallback("btn_up", ui_events.BUTTON_DOWN, this.onButtonMoveClicked, { wnd = self, index = 3 })
 	self:Register(xml:InitButton("btn_down",self), "btn_down")
 	self:AddCallback("btn_down", ui_events.BUTTON_DOWN, this.onButtonMoveClicked, { wnd = self, index = 4 })
-	-- Çóì
+	-- Г‡ГіГ¬
 	self:Register(xml:InitButton("btn_zoom_plus",self), "zoom_plus")
 	self:AddCallback("zoom_plus", ui_events.BUTTON_DOWN, self.ZoomAdd, self)
 	self:Register(xml:InitButton("btn_zoom_minus",self), "zoom_minus")
 	self:AddCallback("zoom_minus", ui_events.BUTTON_DOWN, self.ZoomSub, self)
 	self:Register(xml:InitButton("btn_zoom_default",self), "zoom_default")
 	self:AddCallback("zoom_default", ui_events.BUTTON_DOWN, self.ZoomDefault, self)
-	-- Êíîïêà âûõîäà
+	-- ГЉГ­Г®ГЇГЄГ  ГўГ»ГµГ®Г¤Г 
 	self:Register(xml:Init3tButton("btn_quit",self), "btn_quit")
 	self:AddCallback("btn_quit", ui_events.BUTTON_CLICKED, self.on_quit, self)
 end
@@ -131,7 +131,7 @@ end
 
 function UIPdaTeleport:DrawMap()
 	local texture, rect
-	-- Ãëîáàëüíàÿ êàðòà
+	-- ГѓГ«Г®ГЎГ Г«ГјГ­Г Гї ГЄГ Г°ГІГ 
 	rect = self:GetFrect("global_map", "bound_rect")
 	texture = self.ini:r_string("global_map", "texture")
 	
@@ -156,14 +156,14 @@ function UIPdaTeleport:DrawMap()
 	
 	gMap:SetWndPos(map_st.x, map_st.y)
 	
-	-- ×èòàåì èç ini èìåíà óðîâíåé
+	-- Г—ГЁГІГ ГҐГ¬ ГЁГ§ ini ГЁГ¬ГҐГ­Г  ГіГ°Г®ГўГ­ГҐГ©
 	local res, map, v
 	local tmp = {}
 	for i = 0, self.ini:line_count("level_maps_single")-1 do
 		res, map, v = self.ini:r_line("level_maps_single",i,"","")
 		self.level_maps[string.lower(map)] = true
 	end
-	-- Ðèñóåì êàðòû  óðîâíåé è ìåñòà ïîëîæåíèÿ àíîìàëèé
+	-- ГђГЁГ±ГіГҐГ¬ ГЄГ Г°ГІГ»  ГіГ°Г®ГўГ­ГҐГ© ГЁ Г¬ГҐГ±ГІГ  ГЇГ®Г«Г®Г¦ГҐГ­ГЁГї Г Г­Г®Г¬Г Г«ГЁГ©
 	local actor_pos = db.actor:position()
 	local level_name = level.name()
 	local show_anom = scale>1.5

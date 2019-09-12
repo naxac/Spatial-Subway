@@ -15,7 +15,7 @@ local anom_classes = {
 	[clsid.zone_mosquito_bald] = true
 }
 
--- читаем, что спавнить и с какой вероятностью, из конфигов аномалий
+-- С‡РёС‚Р°РµРј, С‡С‚Рѕ СЃРїР°РІРЅРёС‚СЊ Рё СЃ РєР°РєРѕР№ РІРµСЂРѕСЏС‚РЅРѕСЃС‚СЊСЋ, РёР· РєРѕРЅС„РёРіРѕРІ Р°РЅРѕРјР°Р»РёР№
 function spawn_artefacts()
 	local obj, sect, f
 	local sim, gg = alife(), game_graph()
@@ -55,7 +55,7 @@ function spawn_artefacts()
 	end
 end
 
--- чтобы арты под текстуры не проваливались
+-- С‡С‚РѕР±С‹ Р°СЂС‚С‹ РїРѕРґ С‚РµРєСЃС‚СѓСЂС‹ РЅРµ РїСЂРѕРІР°Р»РёРІР°Р»РёСЃСЊ
 function del_ai_flag( obj )
 	if obj == nil then return end
 
@@ -73,7 +73,7 @@ function del_ai_flag( obj )
 	-- cse_alife_item
 	data.condition       = pk:r_float()
 
-	-- сбрасываем флаг "UsedAi_Locations"
+	-- СЃР±СЂР°СЃС‹РІР°РµРј С„Р»Р°Рі "UsedAi_Locations"
 	data.object_flags = bit_and( data.object_flags, bit_not(128) )
 
 	pk:w_begin( 0 )
