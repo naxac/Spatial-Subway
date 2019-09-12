@@ -23,4 +23,4 @@
 #### Установка: ####
 Папку gamedata из архива скопировать в папку с игрой с заменой файлов.
 
-*Огромное спасибо товарищу [alex5773](https://www.amk-team.ru/forum/profile/18583-alex5773/ "Профиль alex5773 на форуме AMK-Team") с [форума AMK-Team](https://www.amk-team.ru/forum/ "AMK-Team") за тестирование, без него этот мод так и пылился бы в недоделанном виде на гитхабе)*
+*Огромное спасибо товарищу [alex5773](https://www.amk-team.ru/forum/profile/18583-alex5773/ "Профиль alex5773 на форуме AMK-Team") с [форума AMK-Team](https://www.amk-team.ru/forum/ "AMK-Team") за тестирование.*
