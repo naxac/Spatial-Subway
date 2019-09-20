@@ -251,7 +251,7 @@ function UIPdaTeleport:ResizeMap()
 		if v and #v>0 then
 			rect = self:GetFrect(lvl, "bound_rect")
 			self.zoom = st:GetWidth()/rect:width()
-			for i,t in ipairs(v) do
+			for i,t in pairs(v) do
 				pos = self:ConvertPosToPixel(t.pos, rect)
 				local b = self.anoms["btn_"..lvl..i]
 				b:SetWndPos(pos.x, pos.y)
